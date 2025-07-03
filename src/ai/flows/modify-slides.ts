@@ -1,6 +1,6 @@
 'use server';
 /**
- * @fileOverview Modifies an existing slide deck based on user actions.
+ * @fileOverview Modifies an existing slide deck based on user actions, using a structured JSON format.
  *
  * - modifySlides - A function that handles slide modification.
  * - ModifySlidesInput - The input type for the modifySlides function.
@@ -9,13 +9,49 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+// Schemas for structured content
+const ParagraphSchema = z.object({
+  type: z.literal('paragraph'),
+  text: z.string(),
+  bold: z.array(z.string()).optional(),
+});
+
+const BulletListSchema = z.object({
+  type: z.literal('bullet_list'),
+  items: z.array(z.string()),
+});
+
+const NumberedListSchema = z.object({
+  type: z.literal('numbered_list'),
+  items: z.array(z.string()),
+});
+
+const NoteSchema = z.object({
+  type: z.literal('note'),
+  text: z.string(),
+});
+
+const TableSchema = z.object({
+  type: z.literal('table'),
+  headers: z.array(z.string()),
+  rows: z.array(z.array(z.string())),
+});
+
+const ContentItemSchema = z.union([
+  ParagraphSchema,
+  BulletListSchema,
+  NumberedListSchema,
+  NoteSchema,
+  TableSchema,
+]);
+
 const SlideSchema = z.object({
   title: z.string().describe('The title for a single slide.'),
-  content: z.string().describe('The content for a single slide, formatted as markdown bullet points.'),
+  content: z.array(ContentItemSchema).describe('An array of structured content items for the slide body.'),
 });
 
 const ModifySlidesInputSchema = z.object({
-  slides: z.array(SlideSchema).describe('The current array of slide objects.'),
+  slides: z.array(SlideSchema).describe('The current array of slide objects in structured JSON format.'),
   selectedIndices: z.array(z.number()).describe('The indices of the slides to be modified.'),
   action: z.enum(['expand_content', 'replace_content', 'expand_selected']).describe('The modification action to perform.'),
 });
@@ -33,23 +69,21 @@ const prompt = ai.definePrompt({
   name: 'modifySlidesPrompt',
   input: {schema: ModifySlidesInputSchema},
   output: {schema: ModifySlidesOutputSchema},
-  prompt: `You are an AI assistant for creating medical presentations. You will be given an array of presentation slides, the indices of selected slides, and an action to perform on them. Your task is to modify the slides and return the complete, updated array of all slides.
-
-IMPORTANT: The 'content' of each slide is in markdown format. You MUST preserve this format in your output. Use **Bold Text** for emphasis and markdown pipe tables for data.
+  prompt: `You are an AI assistant for creating medical presentations. You will be given an array of presentation slides in a structured JSON format, the indices of selected slides, and an action to perform. Your task is to modify the slides and return the complete, updated array of all slides in the same JSON format.
 
 ACTION: {{{action}}}
 
-CURRENT SLIDES:
+CURRENT SLIDES (JSON):
 {{{json slides}}}
 
 SELECTED SLIDE INDICES:
 {{{json selectedIndices}}}
 
 INSTRUCTIONS:
+- Your response MUST be a complete array of all slides (modified and unmodified) in the correct order, conforming to the JSON schema.
 - If the action is 'expand_content':
   - Take the topics from the selected slides.
-  - Generate more detailed content for these topics.
-  - This may result in creating MORE slides than were originally selected.
+  - Generate more detailed content for these topics. This may result in creating MORE slides than were originally selected.
   - Replace the selected slides in the original array with the new, expanded slides you generate.
 - If the action is 'replace_content':
   - Generate alternative content for the selected slides, keeping the same topics and titles.
@@ -57,11 +91,7 @@ INSTRUCTIONS:
   - Replace the selected slides in the original array with the new ones.
 - If the action is 'expand_selected':
   - Add more in-depth technical explanations and details to the 'content' of the selected slides.
-  - Do NOT change the slide titles.
-  - Do NOT add new slides. Just enrich the content of the existing selected slides.
-  - Keep the content in markdown bullet point format.
-
-Your final output MUST be the complete array of all slides (modified and unmodified) in the correct order, formatted as a JSON array of objects with "title" and "content" keys.
+  - Do NOT change the slide titles or add new slides. Just enrich the 'content' array of the existing selected slides.
 `,
 });
 

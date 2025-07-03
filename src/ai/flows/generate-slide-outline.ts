@@ -1,7 +1,7 @@
 'use server';
 
 /**
- * @fileOverview Generates a slide outline from a given educational topic.
+ * @fileOverview Generates a slide outline from a given educational topic in a structured JSON format.
  *
  * - generateSlideOutline - A function that generates a slide outline.
  * - GenerateSlideOutlineInput - The input type for the generateSlideOutline function.
@@ -16,9 +16,45 @@ const GenerateSlideOutlineInputSchema = z.object({
 });
 export type GenerateSlideOutlineInput = z.infer<typeof GenerateSlideOutlineInputSchema>;
 
+// Schemas for structured content
+const ParagraphSchema = z.object({
+  type: z.literal('paragraph'),
+  text: z.string().describe('A paragraph of text.'),
+  bold: z.array(z.string()).optional().describe('An array of substrings from the text to be bolded.'),
+});
+
+const BulletListSchema = z.object({
+  type: z.literal('bullet_list'),
+  items: z.array(z.string()).describe('An array of strings, where each string is a bullet point.'),
+});
+
+const NumberedListSchema = z.object({
+  type: z.literal('numbered_list'),
+  items: z.array(z.string()).describe('An array of strings, where each string is a numbered list item.'),
+});
+
+const NoteSchema = z.object({
+  type: z.literal('note'),
+  text: z.string().describe('A short note or annotation.'),
+});
+
+const TableSchema = z.object({
+  type: z.literal('table'),
+  headers: z.array(z.string()).describe('An array of strings for the table headers.'),
+  rows: z.array(z.array(z.string())).describe('An array of arrays, where each inner array represents a table row.'),
+});
+
+const ContentItemSchema = z.union([
+  ParagraphSchema,
+  BulletListSchema,
+  NumberedListSchema,
+  NoteSchema,
+  TableSchema,
+]);
+
 const SlideSchema = z.object({
-    title: z.string().describe('The title for a single slide.'),
-    content: z.string().describe('The content for a single slide, formatted as markdown.'),
+  title: z.string().describe('The title for a single slide.'),
+  content: z.array(ContentItemSchema).describe('An array of content items for the slide body.'),
 });
 
 const GenerateSlideOutlineOutputSchema = z.array(SlideSchema);
@@ -36,24 +72,40 @@ const prompt = ai.definePrompt({
 
 Topic: {{{topic}}}
 
-Follow these rules STRICTLY for the "content" of each slide:
-1.  **Format**: The output must be a JSON array of slide objects. Each object must have a "title" and a "content" field.
-2.  **Content Detail**: Each bullet point should be a full, descriptive sentence or a detailed phrase. Avoid overly concise or short points. Incorporate technical terminology where appropriate.
-3.  **Markdown Formatting**:
-    - Use "\\n" for new lines.
-    - For bullet points, start the line with "- ".
-    - For **nested bullet points**, indent the line with two spaces (e.g., "  - Nested item").
-    - For **numbered lists**, use the format "1. ", "2. ", etc.
-    - To make text **bold**, enclose it in double asterisks, like this: **Bold Text**.
-    - To create a **table**, use markdown pipe syntax. The header MUST be separated by a line of hyphens. Text inside tables should NOT be formatted with bold markdown. Example:
-      | Header 1 | Header 2 |
-      |----------|----------|
-      | Data A   | Data B   |
-      | Data C   | Data D   |
-4.  **Structure**: Create a logical flow. Do not cram too much information onto one slide. If a topic is complex, break it into multiple slides.
+Format the entire output as a JSON array of slide objects. Each slide object must conform to the following rules:
+1.  **Slide Object**: Each slide is an object with a "title" (string) and a "content" (array of content items).
+2.  **Content Array**: The "content" array contains different types of content objects. Do NOT put too much content on a single slide; create more slides if a topic is complex. Each content item must be an object with a "type" field.
 
-Example of expected "content" format:
-"- This is the first main bullet point providing a detailed explanation of a concept.\\n- This is another point, with **important terms** highlighted.\\n  - This is a nested bullet point, providing more detail on the point above.\\n  - Another nested point elaborating further.\\n- The presentation continues with a final point on this slide."
+Supported "type" values for content items:
+- **"paragraph"**: For a block of text.
+  - "text": The full paragraph string.
+  - "bold": (Optional) An array of substrings from "text" that should be formatted as bold.
+- **"bullet_list"**: For an unordered list.
+  - "items": An array of strings, where each string is a bullet point.
+- **"numbered_list"**: For an ordered list.
+  - "items": An array of strings, where each string is a list item.
+- **"note"**: For a brief, supplementary note.
+  - "text": The content of the note.
+- **"table"**: For tabular data.
+  - "headers": An array of strings for the table column headers.
+  - "rows": An array of arrays, where each inner array contains the string values for a single row.
+
+Example:
+[
+  {
+    "title": "Introduction to Condition X",
+    "content": [
+      { "type": "paragraph", "text": "Condition X is a chronic inflammatory disease affecting the joints.", "bold": ["Condition X", "chronic inflammatory disease"] },
+      { "type": "bullet_list", "items": ["Symptom A", "Symptom B"] }
+    ]
+  },
+  {
+    "title": "Diagnostic Criteria",
+    "content": [
+       { "type": "table", "headers": ["Criteria", "Description"], "rows": [["Criteria 1", "Details for 1"], ["Criteria 2", "Details for 2"]] }
+    ]
+  }
+]
 `,
 });
 

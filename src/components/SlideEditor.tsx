@@ -10,7 +10,6 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
 import {
@@ -24,6 +23,14 @@ import {
   AlertDialogTrigger,
 } from './ui/alert-dialog';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Trash2,
   Plus,
   RefreshCw,
@@ -32,14 +39,43 @@ import {
   Wand2,
   Scaling,
   ClipboardCopy,
+  FileText,
+  List,
+  ListOrdered,
+  Type,
 } from 'lucide-react';
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
+import { Badge } from './ui/badge';
 
+// Data structures for the structured JSON content
+interface Paragraph {
+  type: 'paragraph';
+  text: string;
+  bold?: string[];
+}
+interface BulletList {
+  type: 'bullet_list';
+  items: string[];
+}
+interface NumberedList {
+  type: 'numbered_list';
+  items: string[];
+}
+interface Note {
+  type: 'note';
+  text: string;
+}
+interface TableContent {
+  type: 'table';
+  headers: string[];
+  rows: string[][];
+}
+export type ContentItem = Paragraph | BulletList | NumberedList | Note | TableContent;
 export interface Slide {
   title: string;
-  content: string;
+  content: ContentItem[];
 }
 
 interface SlideEditorProps {
@@ -48,6 +84,75 @@ interface SlideEditorProps {
   onRefresh: () => void;
   onSlidesUpdate: (slides: Slide[]) => void;
 }
+
+const renderContentItem = (item: ContentItem, index: number) => {
+  const getIcon = () => {
+    switch (item.type) {
+      case 'paragraph': return <Type className="h-4 w-4" />;
+      case 'bullet_list': return <List className="h-4 w-4" />;
+      case 'numbered_list': return <ListOrdered className="h-4 w-4" />;
+      case 'table': return <FileText className="h-4 w-4" />;
+      case 'note': return <FileText className="h-4 w-4" />;
+      default: return null;
+    }
+  };
+
+  const BoldableText = ({ text, boldWords }: { text: string; boldWords?: string[] }) => {
+    if (!boldWords || boldWords.length === 0) {
+      return <>{text}</>;
+    }
+    const regex = new RegExp(`(${boldWords.join('|')})`, 'g');
+    const parts = text.split(regex);
+    return (
+      <>
+        {parts.map((part, i) =>
+          boldWords.includes(part) ? <strong key={i}>{part}</strong> : part
+        )}
+      </>
+    );
+  };
+
+  return (
+    <div key={index} className="mb-2 flex items-start gap-3 rounded-md border p-3">
+       <span className="text-muted-foreground pt-1">{getIcon()}</span>
+       <div className='w-full'>
+            {item.type === 'paragraph' && (
+                <p><BoldableText text={item.text} boldWords={item.bold} /></p>
+            )}
+            {item.type === 'bullet_list' && (
+                <ul className="list-disc pl-5">
+                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                </ul>
+            )}
+            {item.type === 'numbered_list' && (
+                <ol className="list-decimal pl-5">
+                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                </ol>
+            )}
+            {item.type === 'note' && (
+                <p className="text-sm italic text-muted-foreground">Note: {item.text}</p>
+            )}
+            {item.type === 'table' && (
+                <Table>
+                <TableHeader>
+                    <TableRow>
+                    {item.headers.map((header, i) => <TableHead key={i}>{header}</TableHead>)}
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {item.rows.map((row, i) => (
+                    <TableRow key={i}>
+                        {row.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}
+                    </TableRow>
+                    ))}
+                </TableBody>
+                </Table>
+            )}
+        </div>
+    </div>
+  );
+};
+
 
 export function SlideEditor({
   initialSlides,
@@ -83,26 +188,8 @@ export function SlideEditor({
     }
   };
 
-  const handleContentChange = (index: number, newContent: string) => {
-    const newSlides = slides.map((slide, i) =>
-      i === index ? { ...slide, content: newContent } : slide
-    );
-    setSlides(newSlides);
-  };
-
-  const handleTitleChange = (index: number, newTitle: string) => {
-    const newSlides = slides.map((slide, i) =>
-      i === index ? { ...slide, title: newTitle } : slide
-    );
-    setSlides(newSlides);
-  };
-
-  const handleBlur = () => {
-    onSlidesUpdate(slides);
-  };
-
   const addSlide = () => {
-    const newSlide: Slide = { title: 'New Slide', content: '- ' };
+    const newSlide: Slide = { title: 'New Slide', content: [{ type: 'paragraph', text: 'New content...' }] };
     const newSlides = [...slides, newSlide];
     setSlides(newSlides);
     onSlidesUpdate(newSlides);
@@ -162,18 +249,13 @@ export function SlideEditor({
   };
   
   const handleCopyRawContent = () => {
-    const rawContent = slides
-      .map(
-        (slide) => `Title: ${slide.title}\n\nContent:\n${slide.content}`
-      )
-      .join('\n\n--------------------------\n\n');
-
+    const rawContent = JSON.stringify(slides, null, 2);
     navigator.clipboard.writeText(rawContent).then(
       () => {
         toast({
           title: 'Content Copied',
           description:
-            'The raw slide content has been copied to your clipboard.',
+            'The raw JSON slide content has been copied to your clipboard.',
         });
       },
       (err) => {
@@ -191,144 +273,58 @@ export function SlideEditor({
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
 
-    const parseBold = (text: string): PptxGenJS.TextProps[] =>
-      text
-        .split(/(\*\*.*?\*\*)/g)
-        .filter(Boolean)
-        .map((segment) => {
-          if (segment.startsWith('**') && segment.endsWith('**')) {
-            return { text: segment.slice(2, -2), options: { bold: true } };
-          }
-          return { text: segment, options: {} };
-        });
+    slides.forEach((slideData) => {
+      const slide = pptx.addSlide();
+      slide.addText(slideData.title, { 
+          x: 0.5, y: 0.25, w: '90%', h: 0.75, 
+          fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial'
+      });
 
-    const renderContentOnSlide = (slide: PptxGenJS.Slide, lines: string[]): string[] => {
-        const Y_LIMIT = 5.2;
-        const CONTENT_START_Y = 1.25;
-        const LINE_HEIGHT_INCH = 0.3;
-        const TABLE_ROW_HEIGHT_INCH = 0.4;
-        const BLOCK_SPACING_INCH = 0.2;
+      let y = 1.25;
 
-        let yPos = CONTENT_START_Y;
-        let lineIdx = 0;
+      slideData.content.forEach(item => {
+        if (y > 5.0) return; // Stop if slide is full
 
-        while (lineIdx < lines.length) {
-            const currentBlockStartIndex = lineIdx;
-            const isTable = lines[lineIdx].trim().startsWith('|');
-
-            if (isTable) {
-                let tableBlockLines: string[] = [];
-                while (lineIdx < lines.length && lines[lineIdx]?.trim().startsWith('|')) {
-                    tableBlockLines.push(lines[lineIdx]);
-                    lineIdx++;
-                }
-
-                const tableData = tableBlockLines
-                    .filter((row) => !row.includes('--'))
-                    .map((row) => row.split('|').slice(1, -1).map((cell) => ({ text: cell.trim() })));
-
-                const tableHeight = tableData.length * TABLE_ROW_HEIGHT_INCH;
-                if (yPos + tableHeight > Y_LIMIT && yPos > CONTENT_START_Y) {
-                    return lines.slice(currentBlockStartIndex);
-                }
-
-                slide.addTable(tableData, {
-                    x: 0.5, y: yPos, w: 9.0,
-                    border: { type: 'solid', pt: 1, color: 'D9D9D9' },
-                    fontSize: 14, fontFace: 'Arial', rowH: TABLE_ROW_HEIGHT_INCH,
-                });
-                yPos += tableHeight + BLOCK_SPACING_INCH;
-
-            } else {
-                let textBlockLines: string[] = [];
-                while (lineIdx < lines.length && !lines[lineIdx]?.trim().startsWith('|')) {
-                    textBlockLines.push(lines[lineIdx]);
-                    lineIdx++;
-                }
-                
-                let tempY = yPos;
-                const linesThatFit: string[] = [];
-                for (const line of textBlockLines) {
-                    if (tempY + LINE_HEIGHT_INCH > Y_LIMIT && linesThatFit.length > 0) {
-                        break;
-                    }
-                    linesThatFit.push(line);
-                    tempY += LINE_HEIGHT_INCH;
-                }
-
-                if (linesThatFit.length > 0) {
-                    const richText: PptxGenJS.TextProps[] = [];
-                    linesThatFit.forEach((line, index) => {
-                        const indentLevel = Math.floor(line.search(/\S|$/) / 2);
-                        const content = line.trim().replace(/^(- |^\d+\.\s)/, '');
-                        const isBulleted = line.trim().startsWith('-') || /^\d+\.\s/.test(line.trim());
-
-                        const richSegments = parseBold(content);
-                        richSegments.forEach((segment, segIndex) => {
-                            richText.push({
-                                ...segment,
-                                options: {
-                                    ...segment.options,
-                                    ...(segIndex === 0 && isBulleted && { bullet: { indent: 20 + indentLevel * 20 } }),
-                                },
-                            });
-                        });
-                        if (index < linesThatFit.length - 1) {
-                            richText.push({ text: '\n' });
+        switch (item.type) {
+            case 'paragraph': {
+                const textObjects: PptxGenJS.TextProps[] = [];
+                if (!item.bold || item.bold.length === 0) {
+                    textObjects.push({ text: item.text });
+                } else {
+                    const regex = new RegExp(`(${item.bold.join('|')})`, 'g');
+                    const parts = item.text.split(regex);
+                    parts.forEach(part => {
+                        if (item.bold?.includes(part)) {
+                            textObjects.push({ text: part, options: { bold: true } });
+                        } else {
+                            textObjects.push({ text: part });
                         }
                     });
-
-                    slide.addText(richText, {
-                        x: 0.5, y: yPos, w: 9.0, h: tempY - yPos,
-                        fontSize: 18, fontFace: 'Arial', color: '363636', lineSpacing: 28,
-                    });
-                    yPos = tempY; // Removed BLOCK_SPACING_INCH to allow tighter packing
                 }
-                
-                const remainingInBlock = textBlockLines.length - linesThatFit.length;
-                if (remainingInBlock > 0) {
-                    const remainingLines = lines.slice(currentBlockStartIndex + linesThatFit.length);
-                    // If we have remaining lines and we've added something to the slide already, it means we need to continue.
-                    if (linesThatFit.length > 0) {
-                        return remainingLines;
-                    }
-                }
+                slide.addText(textObjects, { x: 0.5, y, w: 9.0, h: 0.5, fontSize: 18, fontFace: 'Arial' });
+                y += 0.5; // Approximate height for a paragraph
+                break;
+            }
+            case 'bullet_list':
+                slide.addText(item.items, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: true });
+                y += item.items.length * 0.3;
+                break;
+            case 'numbered_list':
+                 slide.addText(item.items, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: {type: 'number'} });
+                y += item.items.length * 0.3;
+                break;
+            case 'note':
+                slide.addText(`Note: ${item.text}`, { x: 0.5, y, w: 9.0, h: 0.4, fontSize: 14, fontFace: 'Arial', italic: true, color: '666666' });
+                y += 0.4;
+                break;
+            case 'table': {
+                const tableRows = [item.headers.map(h => ({text: h, options: {bold: true}})), ...item.rows];
+                slide.addTable(tableRows, { x: 0.5, y, w: 9.0, rowH: 0.3, border: { type: 'solid', pt: 1, color: 'D9D9D9' }});
+                y += (item.rows.length + 1) * 0.3;
+                break;
             }
         }
-        return [];
-    };
-
-    slides.forEach((slideData) => {
-      const { title, content } = slideData;
-      let linesToProcess = content.split('\n').filter((line) => line.trim() !== '');
-
-      if (linesToProcess.length === 0) {
-        const slide = pptx.addSlide();
-        slide.addText(title, { x: 0.5, y: 0.25, w: '90%', h: 0.75, fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial' });
-        return;
-      }
-
-      let isFirstPhysicalSlide = true;
-      while (linesToProcess.length > 0) {
-        const slide = pptx.addSlide();
-        const slideTitle = title + (isFirstPhysicalSlide ? '' : ' (Continued)');
-        slide.addText(slideTitle, { x: 0.5, y: 0.25, w: '90%', h: 0.75, fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial' });
-        
-        const remainingLines = renderContentOnSlide(slide, linesToProcess);
-        
-        if (remainingLines.length > 0 && linesToProcess.length !== remainingLines.length) {
-            slide.addText('(Continued...)', { x: '85%', y: '92%', w: '15%', h: '8%', fontSize: 12, italic: true, color: '999999', align: 'right' });
-        }
-        
-        linesToProcess = remainingLines;
-        isFirstPhysicalSlide = false;
-
-        // Break loop if no progress is made to prevent infinite loops
-        if (linesToProcess.length > 0 && linesToProcess === remainingLines) {
-            console.error("Infinite loop detected in PPTX generation. Aborting for this slide.");
-            break;
-        }
-      }
+      });
     });
 
     pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
@@ -435,12 +431,7 @@ export function SlideEditor({
                     onCheckedChange={() => handleSelectionChange(index)}
                     aria-label={`Select slide ${index + 1}`}
                   />
-                  <Input
-                    value={slide.title}
-                    onChange={(e) => handleTitleChange(index, e.target.value)}
-                    onBlur={handleBlur}
-                    className="h-auto border-0 p-0 text-lg font-semibold shadow-none focus-visible:ring-1 focus-visible:ring-ring"
-                  />
+                  <h3 className="text-lg font-semibold">{slide.title}</h3>
                 </div>
                 <Button
                   variant="ghost"
@@ -452,13 +443,7 @@ export function SlideEditor({
                 </Button>
               </CardHeader>
               <CardContent className="p-4 pt-0 pl-12">
-                <Textarea
-                  value={slide.content}
-                  onChange={(e) => handleContentChange(index, e.target.value)}
-                  onBlur={handleBlur}
-                  className="min-h-[120px] w-full"
-                  placeholder="Use markdown for bullet points (e.g., - point 1)"
-                />
+                {slide.content.map(renderContentItem)}
               </CardContent>
             </Card>
           ))}

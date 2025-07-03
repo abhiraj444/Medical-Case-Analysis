@@ -45,7 +45,7 @@ export default function ContentGeneratorPage() {
     }
   };
 
-  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
     const items = event.clipboardData.items;
     for (let i = 0; i < items.length; i++) {
         if (items[i].type.indexOf('image') !== -1) {
@@ -203,6 +203,7 @@ export default function ContentGeneratorPage() {
                         type="file"
                         accept=".jpg,.jpeg,.png"
                         onChange={handleFileChange}
+                        onPaste={handlePaste}
                         disabled={isLoading}
                       />
                       {imagePreview && (
