@@ -74,10 +74,11 @@ Topic: {{{topic}}}
 
 Format the entire output as a JSON array of slide objects. Each slide object must conform to the following rules:
 1.  **Slide Object**: Each slide is an object with a "title" (string) and a "content" (array of content items).
-2.  **Content Array**: The "content" array contains different types of content objects. Do NOT put too much content on a single slide; create more slides if a topic is complex. Each content item must be an object with a "type" field.
+2.  **Content Breakdown**: Deconstruct complex topics into multiple small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs; use lists to convey information concisely. For each slide, aim for a maximum of 6-8 distinct points (bullets, list items, or table rows) to ensure clarity and readability.
+3.  **Content Array**: The "content" array contains different types of content objects. Do NOT put too much content on a single slide; create more slides if a topic is complex. Each content item must be an object with a "type" field.
 
 Supported "type" values for content items:
-- **"paragraph"**: For a block of text.
+- **"paragraph"**: For a block of text. This should be used sparingly.
   - "text": The full paragraph string.
   - "bold": (Optional) An array of substrings from "text" that should be formatted as bold.
 - **"bullet_list"**: For an unordered list.

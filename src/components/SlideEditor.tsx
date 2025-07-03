@@ -272,16 +272,7 @@ export function SlideEditor({
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
 
-    slides.forEach((slideData) => {
-      let slide = pptx.addSlide();
-      slide.addText(slideData.title, { 
-          x: 0.5, y: 0.25, w: '90%', h: 0.75, 
-          fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial'
-      });
-
-      let y = 1.25;
-
-      const buildRichText = (text: string, boldWords: string[] = []): PptxGenJS.TextProps[] => {
+    const buildRichText = (text: string, boldWords: string[] = []): PptxGenJS.TextProps[] => {
         if (!boldWords?.length) {
             return [{ text }];
         }
@@ -293,77 +284,130 @@ export function SlideEditor({
         let lastIndex = 0;
         let match;
     
-        // Find all matches
         while ((match = regex.exec(text)) !== null) {
-            // Add the text before the match
             if (match.index > lastIndex) {
                 textObjects.push({ text: text.substring(lastIndex, match.index) });
             }
-            // Add the bolded match
-            if (match[0]) { // Ensure not to push empty matches
+            if (match[0]) {
               textObjects.push({ text: match[0], options: { bold: true } });
             }
             lastIndex = regex.lastIndex;
         }
     
-        // Add any remaining text after the last match
         if (lastIndex < text.length) {
             textObjects.push({ text: text.substring(lastIndex) });
         }
     
         return textObjects.length > 0 ? textObjects : [{ text }];
-      };
+    };
 
-      slideData.content.forEach(item => {
-        if (y > 5.0) { // Check before adding content
-            slide.addText('(Continued...)', {
-                x: '85%', y: '90%', w: '10%', h: '5%',
-                fontSize: 10, italic: true, color: '666666', align: 'right'
-            });
-            slide = pptx.addSlide();
-            slide.addText(`${slideData.title} (Continued)`, {
+    slides.forEach((slideData) => {
+        const MAX_LINES_PER_SLIDE = 8;
+        const MAX_WORDS_PER_SLIDE = 120;
+
+        let y = 1.25;
+        let lineCount = 0;
+        let wordCount = 0;
+        let isFirstContentOnSlide = true;
+        let currentSlide = pptx.addSlide();
+
+        const setupSlide = (title: string, isContinuation: boolean) => {
+            currentSlide.addText(title + (isContinuation ? " (Continued)" : ""), {
                 x: 0.5, y: 0.25, w: '90%', h: 0.75,
-                fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial'
+                fontSize: 24, bold: true, color: '3B5998', fontFace: 'Arial'
             });
             y = 1.25;
-        }
+            lineCount = 0;
+            wordCount = 0;
+            isFirstContentOnSlide = true;
+        };
 
-        switch (item.type) {
-            case 'paragraph': {
-                const textObjects = buildRichText(item.text, item.bold);
-                slide.addText(textObjects, { x: 0.5, y, w: 9.0, h: 0.5, fontSize: 18, fontFace: 'Arial' });
-                y += 0.5; // Approximate height for a paragraph
-                break;
-            }
-            case 'bullet_list': {
-                const bulletPoints = item.items.map(point => ({ text: point }));
-                slide.addText(bulletPoints, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: true });
-                y += item.items.length * 0.3;
-                break;
-            }
-            case 'numbered_list': {
-                const numberedPoints = item.items.map(point => ({ text: point }));
-                slide.addText(numberedPoints, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: {type: 'number'} });
-                y += item.items.length * 0.3;
-                break;
-            }
-            case 'note':
-                slide.addText(`Note: ${item.text}`, { x: 0.5, y, w: 9.0, h: 0.4, fontSize: 14, fontFace: 'Arial', italic: true, color: '666666' });
-                y += 0.4;
-                break;
-            case 'table': {
-                const headerRow = item.headers.map(h => ({ text: h, options: { bold: true } }));
-                const bodyRows = item.rows.map(row => row.map(cell => ({ text: cell || '' })));
-                const tableRows = [headerRow, ...bodyRows];
+        const checkAndCreateNewSlide = (neededLines: number, neededWords: number) => {
+            if (!isFirstContentOnSlide && (lineCount + neededLines > MAX_LINES_PER_SLIDE || wordCount + neededWords > MAX_WORDS_PER_SLIDE)) {
+                currentSlide.addText('(Continued...)', {
+                    x: 8.5, y: 5.0, w: '10%', h: '5%',
+                    fontSize: 10, italic: true, color: '666666', align: 'right'
+                });
 
-                slide.addTable(tableRows, { x: 0.5, y, w: 9.0, rowH: 0.3, border: { type: 'solid', pt: 1, color: 'D9D9D9' }});
-                y += (item.rows.length + 1) * 0.3;
-                break;
+                currentSlide = pptx.addSlide();
+                setupSlide(slideData.title, true);
             }
-        }
-      });
+            isFirstContentOnSlide = false;
+        };
+        
+        setupSlide(slideData.title, false);
+
+        slideData.content.forEach((item) => {
+            switch (item.type) {
+                case 'paragraph': {
+                    const neededLines = 1;
+                    const neededWords = item.text.split(' ').length;
+                    checkAndCreateNewSlide(neededLines, neededWords);
+
+                    const textObjects = buildRichText(item.text, item.bold);
+                    currentSlide.addText(textObjects, {
+                        x: 0.7, y, w: '85%',
+                        fontSize: 18, lineSpacing: 28, fontFace: 'Arial', bullet: true,
+                    });
+                    y += 0.4 + Math.floor(neededWords / 20) * 0.2;
+                    lineCount += neededLines;
+                    wordCount += neededWords;
+                    break;
+                }
+                case 'bullet_list':
+                case 'numbered_list': {
+                    item.items.forEach(point => {
+                        const neededLines = 1;
+                        const neededWords = point.split(' ').length;
+                        checkAndCreateNewSlide(neededLines, neededWords);
+                        
+                        currentSlide.addText(point, {
+                            x: 0.7, y, w: '85%',
+                            fontSize: 18, lineSpacing: 28, fontFace: 'Arial',
+                            bullet: item.type === 'bullet_list' ? true : { type: 'number' }
+                        });
+                        y += 0.4 + Math.floor(neededWords / 20) * 0.2;
+                        lineCount += neededLines;
+                        wordCount += neededWords;
+                    });
+                    break;
+                }
+                case 'table': {
+                    const neededLines = item.rows.length + 1;
+                    const neededWords = JSON.stringify(item).split(' ').length;
+                    checkAndCreateNewSlide(neededLines, neededWords);
+                    
+                    const headerRow = item.headers.map(h => ({ text: h, options: { bold: true } }));
+                    const bodyRows = item.rows.map(row => row.map(cell => ({ text: cell || '' })));
+                    const tableRows = [headerRow, ...bodyRows];
+
+                    const tableHeight = (item.rows.length + 1) * 0.4;
+                    currentSlide.addTable(tableRows, {
+                        x: 0.5, y, w: 9.0, autoPage: true,
+                        border: { type: 'solid', pt: 1, color: 'D9D9D9' },
+                        fontSize: 14,
+                        rowH: 0.4
+                    });
+                    y += tableHeight;
+                    lineCount += neededLines;
+                    wordCount += neededWords;
+                    break;
+                }
+                case 'note': {
+                    if (y > 4.8) { // Simple check to avoid note overlapping footer
+                        checkAndCreateNewSlide(1, 10);
+                    }
+                    currentSlide.addText(`Note: ${item.text}`, {
+                        x: 0.5, y, w: 9.0, h: 0.4,
+                        fontSize: 14, fontFace: 'Arial', italic: true, color: '666666'
+                    });
+                    y += 0.4;
+                    break;
+                }
+            }
+        });
     });
-
+    
     pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
   };
 

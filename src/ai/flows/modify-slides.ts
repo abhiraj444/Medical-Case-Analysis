@@ -81,6 +81,7 @@ SELECTED SLIDE INDICES:
 
 INSTRUCTIONS:
 - Your response MUST be a complete array of all slides (modified and unmodified) in the correct order, conforming to the JSON schema.
+- **CRITICAL**: Break down complex topics into many small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs. Aim for 6-8 distinct points per slide.
 - If the action is 'expand_content':
   - Take the topics from the selected slides.
   - Generate more detailed content for these topics. This may result in creating MORE slides than were originally selected.
@@ -88,7 +89,6 @@ INSTRUCTIONS:
 - If the action is 'replace_content':
   - Generate alternative content for the selected slides, keeping the same topics and titles.
   - The number of slides returned should be the same as the number of selected slides.
-  - Replace the selected slides in the original array with the new ones.
 - If the action is 'expand_selected':
   - Add more in-depth technical explanations and details to the 'content' of the selected slides.
   - Do NOT change the slide titles or add new slides. Just enrich the 'content' array of the existing selected slides.
