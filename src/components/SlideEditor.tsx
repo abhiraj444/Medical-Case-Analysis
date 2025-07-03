@@ -121,7 +121,7 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
   }
 
   const handleExport = () => {
-    const pptx = new pptxgenjs();
+    const pptx = new pptxgen();
     pptx.layout = 'LAYOUT_16x9';
     const MAX_LINES_PER_SLIDE = 15;
 
@@ -177,16 +177,23 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
                 const textObjects = currentBulletBlock.flatMap((item, index) => {
                     const parsed = parseBold(item.text);
                     // This is now safe as parseBold always returns an options object.
-                    parsed[0].options = { ...parsed[0].options, ...item.options };
+                    if (parsed.length > 0 && parsed[0].options) {
+                       parsed[0].options = { ...parsed[0].options, ...item.options };
+                    } else if (parsed.length > 0) {
+                        parsed[0].options = item.options;
+                    }
+
                     if (index > 0) {
                        parsed.unshift({ text: '\n', options: {} });
                     }
                     return parsed;
                 });
 
-                pptxSlide.addText(textObjects, { x: 0.5, y: yPos, w: '90%', fontSize: 18, paraSpaceAfter: 8 });
-                // Correctly estimate height based on the number of bullet points, not total slide lines.
-                yPos += (currentBulletBlock.length * 0.3) + 0.2;
+                if (textObjects.length > 0) {
+                  pptxSlide.addText(textObjects, { x: 0.5, y: yPos, w: '90%', fontSize: 18, paraSpaceAfter: 8 });
+                  // Correctly estimate height based on the number of bullet points, not total slide lines.
+                  yPos += (currentBulletBlock.length * 0.3) + 0.2;
+                }
                 currentBulletBlock = [];
             }
         };
