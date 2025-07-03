@@ -1,7 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import PptxGenJS from 'pptxgenjs';
+import {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  AlignmentType,
+  Table,
+  TableRow,
+  TableCell,
+  BorderStyle,
+} from 'docx';
+import { saveAs } from 'file-saver';
 import {
   Card,
   CardContent,
@@ -23,12 +35,12 @@ import {
   AlertDialogTrigger,
 } from './ui/alert-dialog';
 import {
-  Table,
+  Table as ShadcnTable,
   TableBody,
-  TableCell,
+  TableCell as ShadcnTableCell,
   TableHead,
   TableHeader,
-  TableRow,
+  TableRow as ShadcnTableRow,
 } from '@/components/ui/table';
 import {
   Trash2,
@@ -49,7 +61,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
 
 // Data structures for the structured JSON content
-interface Paragraph {
+interface ParagraphContent {
   type: 'paragraph';
   text: string;
   bold?: string[];
@@ -71,7 +83,7 @@ interface TableContent {
   headers: string[];
   rows: string[][];
 }
-export type ContentItem = Paragraph | BulletList | NumberedList | Note | TableContent;
+export type ContentItem = ParagraphContent | BulletList | NumberedList | Note | TableContent;
 export interface Slide {
   title: string;
   content: ContentItem[];
@@ -132,20 +144,20 @@ const renderContentItem = (item: ContentItem, index: number) => {
                 <p className="text-sm italic text-muted-foreground">Note: {item.text}</p>
             )}
             {item.type === 'table' && (
-                <Table>
+                <ShadcnTable>
                 <TableHeader>
-                    <TableRow>
+                    <ShadcnTableRow>
                     {item.headers.map((header, i) => <TableHead key={i}>{header}</TableHead>)}
-                    </TableRow>
+                    </ShadcnTableRow>
                 </TableHeader>
                 <TableBody>
                     {item.rows.map((row, i) => (
-                    <TableRow key={i}>
-                        {row.map((cell, j) => <TableCell key={j}>{cell}</TableCell>)}
-                    </TableRow>
+                    <ShadcnTableRow key={i}>
+                        {row.map((cell, j) => <ShadcnTableCell key={j}>{cell}</ShadcnTableCell>)}
+                    </ShadcnTableRow>
                     ))}
                 </TableBody>
-                </Table>
+                </ShadcnTable>
             )}
         </div>
     </div>
@@ -268,147 +280,159 @@ export function SlideEditor({
     );
   };
 
-  const handleExport = () => {
-    const pptx = new PptxGenJS();
-    pptx.layout = 'LAYOUT_16x9';
+  const handleExport = async () => {
+    setIsModifying(true);
+    try {
+      const docChildren: (Paragraph | Table)[] = [];
 
-    const buildRichText = (text: string, boldWords: string[] = []): PptxGenJS.TextProps[] => {
-        if (!boldWords?.length) {
-            return [{ text }];
-        }
-    
-        const textObjects: PptxGenJS.TextProps[] = [];
-        // Create a regex that is case-insensitive and global
-        const regex = new RegExp(`(${boldWords.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
-        
-        let lastIndex = 0;
-        let match;
-    
-        while ((match = regex.exec(text)) !== null) {
-            if (match.index > lastIndex) {
-                textObjects.push({ text: text.substring(lastIndex, match.index) });
+      slides.forEach((slide) => {
+        docChildren.push(
+          new Paragraph({
+            text: slide.title,
+            heading: HeadingLevel.HEADING_1,
+            spacing: { after: 200 },
+          })
+        );
+
+        slide.content.forEach((item) => {
+          switch (item.type) {
+            case 'paragraph': {
+              const textRuns: TextRun[] = [];
+              if (item.bold && item.bold.length > 0) {
+                 const boldWordsEscaped = item.bold.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+                 const regex = new RegExp(`(${boldWordsEscaped.join('|')})`, 'g');
+                 const parts = item.text.split(regex).filter(part => part);
+
+                 parts.forEach(part => {
+                     if (item.bold?.includes(part)) {
+                         textRuns.push(new TextRun({ text: part, bold: true }));
+                     } else {
+                         textRuns.push(new TextRun(part));
+                     }
+                 });
+              } else {
+                textRuns.push(new TextRun(item.text));
+              }
+              docChildren.push(
+                new Paragraph({
+                  children: textRuns.length > 0 ? textRuns : [new TextRun('')],
+                  spacing: { after: 100 },
+                })
+              );
+              break;
             }
-            if (match[0]) {
-              textObjects.push({ text: match[0], options: { bold: true } });
+            case 'bullet_list':
+              item.items.forEach((bulletText) => {
+                docChildren.push(
+                  new Paragraph({ text: bulletText, bullet: { level: 0 }, spacing: { after: 50 } })
+                );
+              });
+              break;
+            case 'numbered_list':
+              item.items.forEach((numberedText) => {
+                docChildren.push(
+                  new Paragraph({ text: numberedText, numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
+                );
+              });
+              break;
+            case 'table': {
+              const headerRow = new TableRow({
+                children: item.headers.map(
+                  (header) =>
+                    new TableCell({
+                      children: [
+                        new Paragraph({
+                          children: [new TextRun({ text: header, bold: true })],
+                          alignment: AlignmentType.CENTER,
+                        }),
+                      ],
+                      shading: {
+                        fill: 'EBF2FA',
+                      },
+                    })
+                ),
+                tableHeader: true,
+              });
+
+              const bodyRows = item.rows.map(
+                (row) =>
+                  new TableRow({
+                    children: row.map(
+                      (cellText) => new TableCell({ children: [new Paragraph(cellText || '')] })
+                    ),
+                  })
+              );
+
+              const table = new Table({
+                rows: [headerRow, ...bodyRows],
+                width: {
+                  size: 9000,
+                  type: 'dxa',
+                },
+                borders: {
+                    top: { style: BorderStyle.SINGLE, size: 1, color: "D3D3D3" },
+                    bottom: { style: BorderStyle.SINGLE, size: 1, color: "D3D3D3" },
+                    left: { style: BorderStyle.SINGLE, size: 1, color: "D3D3D3" },
+                    right: { style: BorderStyle.SINGLE, size: 1, color: "D3D3D3" },
+                    insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "D3D3D3" },
+                    insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "D3D3D3" },
+                },
+              });
+              docChildren.push(table);
+              docChildren.push(new Paragraph({ text: '', spacing: { after: 200 } })); // space after table
+              break;
             }
-            lastIndex = regex.lastIndex;
-        }
-    
-        if (lastIndex < text.length) {
-            textObjects.push({ text: text.substring(lastIndex) });
-        }
-    
-        return textObjects.length > 0 ? textObjects : [{ text }];
-    };
-
-    slides.forEach((slideData) => {
-        const MAX_LINES_PER_SLIDE = 8;
-        const MAX_WORDS_PER_SLIDE = 120;
-
-        let y = 1.25;
-        let lineCount = 0;
-        let wordCount = 0;
-        let isFirstContentOnSlide = true;
-        let currentSlide = pptx.addSlide();
-
-        const setupSlide = (title: string, isContinuation: boolean) => {
-            currentSlide.addText(title + (isContinuation ? " (Continued)" : ""), {
-                x: 0.5, y: 0.25, w: '90%', h: 0.75,
-                fontSize: 24, bold: true, color: '3B5998', fontFace: 'Arial'
-            });
-            y = 1.25;
-            lineCount = 0;
-            wordCount = 0;
-            isFirstContentOnSlide = true;
-        };
-
-        const checkAndCreateNewSlide = (neededLines: number, neededWords: number) => {
-            if (!isFirstContentOnSlide && (lineCount + neededLines > MAX_LINES_PER_SLIDE || wordCount + neededWords > MAX_WORDS_PER_SLIDE)) {
-                currentSlide.addText('(Continued...)', {
-                    x: 8.5, y: 5.0, w: '10%', h: '5%',
-                    fontSize: 10, italic: true, color: '666666', align: 'right'
-                });
-
-                currentSlide = pptx.addSlide();
-                setupSlide(slideData.title, true);
-            }
-            isFirstContentOnSlide = false;
-        };
-        
-        setupSlide(slideData.title, false);
-
-        slideData.content.forEach((item) => {
-            switch (item.type) {
-                case 'paragraph': {
-                    const neededLines = 1;
-                    const neededWords = item.text.split(' ').length;
-                    checkAndCreateNewSlide(neededLines, neededWords);
-
-                    const textObjects = buildRichText(item.text, item.bold);
-                    currentSlide.addText(textObjects, {
-                        x: 0.7, y, w: '85%',
-                        fontSize: 18, lineSpacing: 28, fontFace: 'Arial', bullet: true,
-                    });
-                    y += 0.4 + Math.floor(neededWords / 20) * 0.2;
-                    lineCount += neededLines;
-                    wordCount += neededWords;
-                    break;
-                }
-                case 'bullet_list':
-                case 'numbered_list': {
-                    item.items.forEach(point => {
-                        const neededLines = 1;
-                        const neededWords = point.split(' ').length;
-                        checkAndCreateNewSlide(neededLines, neededWords);
-                        
-                        currentSlide.addText(point, {
-                            x: 0.7, y, w: '85%',
-                            fontSize: 18, lineSpacing: 28, fontFace: 'Arial',
-                            bullet: item.type === 'bullet_list' ? true : { type: 'number' }
-                        });
-                        y += 0.4 + Math.floor(neededWords / 20) * 0.2;
-                        lineCount += neededLines;
-                        wordCount += neededWords;
-                    });
-                    break;
-                }
-                case 'table': {
-                    const neededLines = item.rows.length + 1;
-                    const neededWords = JSON.stringify(item).split(' ').length;
-                    checkAndCreateNewSlide(neededLines, neededWords);
-                    
-                    const headerRow = item.headers.map(h => ({ text: h, options: { bold: true } }));
-                    const bodyRows = item.rows.map(row => row.map(cell => ({ text: cell || '' })));
-                    const tableRows = [headerRow, ...bodyRows];
-
-                    const tableHeight = (item.rows.length + 1) * 0.4;
-                    currentSlide.addTable(tableRows, {
-                        x: 0.5, y, w: 9.0, autoPage: true,
-                        border: { type: 'solid', pt: 1, color: 'D9D9D9' },
-                        fontSize: 14,
-                        rowH: 0.4
-                    });
-                    y += tableHeight;
-                    lineCount += neededLines;
-                    wordCount += neededWords;
-                    break;
-                }
-                case 'note': {
-                    if (y > 4.8) { // Simple check to avoid note overlapping footer
-                        checkAndCreateNewSlide(1, 10);
-                    }
-                    currentSlide.addText(`Note: ${item.text}`, {
-                        x: 0.5, y, w: 9.0, h: 0.4,
-                        fontSize: 14, fontFace: 'Arial', italic: true, color: '666666'
-                    });
-                    y += 0.4;
-                    break;
-                }
-            }
+            case 'note':
+              docChildren.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `Note: ${item.text}`, italic: true })],
+                  spacing: { after: 100 },
+                })
+              );
+              break;
+          }
         });
-    });
-    
-    pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
+      });
+
+      const doc = new Document({
+        numbering: {
+          config: [
+            {
+              levels: [
+                {
+                  level: 0,
+                  format: 'decimal',
+                  text: '%1.',
+                  alignment: AlignmentType.LEFT,
+                },
+              ],
+              reference: 'default-numbering',
+            },
+          ],
+        },
+        sections: [
+          {
+            children: docChildren,
+          },
+        ],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `${topic.replace(/\s+/g, '_') || 'document'}.docx`);
+      toast({
+        title: 'Document Generated',
+        description: 'Your Word document has been downloaded.',
+      });
+    } catch (error) {
+      console.error('Error generating docx:', error);
+      toast({
+        title: 'An Error Occurred',
+        description: 'Failed to generate Word document. Please check the console.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsModifying(false);
+    }
   };
 
 
@@ -425,14 +449,14 @@ export function SlideEditor({
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/80">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Modifying your slides...</span>
+              <span>Processing...</span>
             </div>
           </div>
         )}
         <CardHeader>
-          <CardTitle>Presentation Editor</CardTitle>
+          <CardTitle>Content Editor</CardTitle>
           <CardDescription>
-            Review, edit, and modify your slides before exporting.
+            Review, edit, and modify your content before exporting.
           </CardDescription>
           <div className="flex flex-wrap items-center gap-2 pt-4">
             <div className="flex-grow space-y-1">
@@ -463,7 +487,7 @@ export function SlideEditor({
                 disabled={isModifying}
               >
                 <Plus />
-                Add Slide
+                Add Section
               </Button>
               <Button
                 variant="outline"
@@ -478,7 +502,7 @@ export function SlideEditor({
                 disabled={isModifying || slides.length === 0}
               >
                 <FileDown />
-                Generate PowerPoint
+                Generate Word Document
               </Button>
             </div>
           </div>
@@ -494,7 +518,7 @@ export function SlideEditor({
             <Label htmlFor="select-all" className="text-sm font-medium">
               {selectedIndices.length > 0
                 ? `${selectedIndices.length} of ${slides.length} selected`
-                : 'Select slides'}
+                : 'Select sections'}
             </Label>
           </div>
 
@@ -546,7 +570,7 @@ export function SlideEditor({
               <AlertDialogHeader>
                 <AlertDialogTitle>Refresh Content</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Choose how to regenerate content for the selected slides.
+                  Choose how to regenerate content for the selected sections.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="grid gap-4 py-4">
@@ -559,7 +583,7 @@ export function SlideEditor({
                     <span className="font-semibold">Expand Content</span>
                     <span className="text-sm text-muted-foreground">
                       Generate more detailed content, possibly adding more
-                      slides.
+                      sections.
                     </span>
                   </div>
                 </Button>
