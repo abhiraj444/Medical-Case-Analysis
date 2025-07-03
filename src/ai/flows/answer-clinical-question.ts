@@ -11,7 +11,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
-export const AnswerClinicalQuestionInputSchema = z.object({
+const AnswerClinicalQuestionInputSchema = z.object({
   question: z.string().optional().describe('The clinical question being asked by the user.'),
   image: z.string().optional().describe("An image related to the clinical question, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
 }).superRefine((data, ctx) => {
@@ -24,7 +24,7 @@ export const AnswerClinicalQuestionInputSchema = z.object({
 });
 export type AnswerClinicalQuestionInput = z.infer<typeof AnswerClinicalQuestionInputSchema>;
 
-export const AnswerClinicalQuestionOutputSchema = z.object({
+const AnswerClinicalQuestionOutputSchema = z.object({
   answer: z.string().describe('A detailed answer to the clinical question. This should be formatted with markdown, including bold text for emphasis.'),
   reasoning: z.string().describe('The step-by-step reasoning for arriving at the answer. This should also be formatted with markdown.'),
   topic: z.string().describe('A concise, presentation-friendly title summarizing the main topic of the question (e.g., "Management of Acute Myocardial Infarction").'),
