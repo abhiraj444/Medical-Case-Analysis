@@ -249,7 +249,7 @@ export function SlideEditor({
   };
   
   const handleCopyRawContent = () => {
-    const rawContent = JSON.stringify(slides, null, 2);
+    const rawContent = JSON.stringify({slides}, null, 2);
     navigator.clipboard.writeText(rawContent).then(
       () => {
         toast({
@@ -274,7 +274,7 @@ export function SlideEditor({
     pptx.layout = 'LAYOUT_16x9';
 
     slides.forEach((slideData) => {
-      const slide = pptx.addSlide();
+      let slide = pptx.addSlide();
       slide.addText(slideData.title, { 
           x: 0.5, y: 0.25, w: '90%', h: 0.75, 
           fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial'
@@ -283,7 +283,18 @@ export function SlideEditor({
       let y = 1.25;
 
       slideData.content.forEach(item => {
-        if (y > 5.0) return; // Stop if slide is full
+        if (y > 5.0) { // Check before adding content
+            slide.addText('(Continued...)', {
+                x: '85%', y: '90%', w: '10%', h: '5%',
+                fontSize: 10, italic: true, color: '666666', align: 'right'
+            });
+            slide = pptx.addSlide();
+            slide.addText(`${slideData.title} (Continued)`, {
+                x: 0.5, y: 0.25, w: '90%', h: 0.75,
+                fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial'
+            });
+            y = 1.25;
+        }
 
         switch (item.type) {
             case 'paragraph': {
@@ -291,7 +302,7 @@ export function SlideEditor({
                 if (!item.bold || item.bold.length === 0) {
                     textObjects.push({ text: item.text });
                 } else {
-                    const regex = new RegExp(`(${item.bold.join('|')})`, 'g');
+                    const regex = new RegExp(`(${item.bold.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
                     const parts = item.text.split(regex);
                     parts.forEach(part => {
                         if (item.bold?.includes(part)) {
@@ -305,14 +316,18 @@ export function SlideEditor({
                 y += 0.5; // Approximate height for a paragraph
                 break;
             }
-            case 'bullet_list':
-                slide.addText(item.items, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: true });
+            case 'bullet_list': {
+                const bulletPoints = item.items.map(point => ({ text: point }));
+                slide.addText(bulletPoints, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: true });
                 y += item.items.length * 0.3;
                 break;
-            case 'numbered_list':
-                 slide.addText(item.items, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: {type: 'number'} });
+            }
+            case 'numbered_list': {
+                const numberedPoints = item.items.map(point => ({ text: point }));
+                slide.addText(numberedPoints, { x: 0.5, y, w: 9.0, h: item.items.length * 0.3, fontSize: 18, fontFace: 'Arial', bullet: {type: 'number'} });
                 y += item.items.length * 0.3;
                 break;
+            }
             case 'note':
                 slide.addText(`Note: ${item.text}`, { x: 0.5, y, w: 9.0, h: 0.4, fontSize: 14, fontFace: 'Arial', italic: true, color: '666666' });
                 y += 0.4;
