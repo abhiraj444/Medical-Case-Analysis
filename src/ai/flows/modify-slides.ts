@@ -14,7 +14,7 @@ const SlideSchema = z.object({
   content: z.string().describe('The content for a single slide, formatted as markdown bullet points.'),
 });
 
-export const ModifySlidesInputSchema = z.object({
+const ModifySlidesInputSchema = z.object({
   slides: z.array(SlideSchema).describe('The current array of slide objects.'),
   selectedIndices: z.array(z.number()).describe('The indices of the slides to be modified.'),
   action: z.enum(['expand_content', 'replace_content', 'expand_selected']).describe('The modification action to perform.'),
