@@ -10,14 +10,18 @@ import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescript
 import { Trash2, Plus, RefreshCw, FileDown, Loader2, Wand2, Scaling } from 'lucide-react';
 import pptxgen from 'pptxgenjs';
 import { modifySlides } from '@/ai/flows/modify-slides';
-import type { Slide } from '@/app/content-generator/page';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
+
+export interface Slide {
+  title: string;
+  content: string;
+}
 
 interface SlideEditorProps {
   initialSlides: Slide[];
   topic: string;
-  onRefresh: (topic: string) => void;
+  onRefresh: () => void;
   onSlidesUpdate: (slides: Slide[]) => void;
 }
 
@@ -69,7 +73,7 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
   }
 
   const addSlide = () => {
-    const newSlide: Slide = { title: 'New Slide', content: '' };
+    const newSlide: Slide = { title: 'New Slide', content: '- ' };
     const newSlides = [...slides, newSlide];
     setSlides(newSlides);
     onSlidesUpdate(newSlides);
@@ -92,7 +96,7 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
   }
   
   const handleRefreshClick = () => {
-    onRefresh(topic);
+    onRefresh();
   }
 
   const handleModifySlides = async (action: 'expand_content' | 'replace_content' | 'expand_selected') => {
@@ -116,38 +120,111 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
     }
   }
 
+  const parseTextToPptxObjects = (text: string): { text: string; options?: pptxgen.TextProps }[] => {
+    const segments = text.split(/(\*\*.*?\*\*)/g).filter(p => p);
+    return segments.map(segment => {
+      if (segment.startsWith('**') && segment.endsWith('**')) {
+        return { text: segment.slice(2, -2), options: { bold: true } };
+      }
+      return { text: segment };
+    });
+  };
+
   const handleExport = () => {
     const pptx = new pptxgen();
-    pptx.layout = 'LAYOUT_WIDE';
+    pptx.layout = 'LAYOUT_16x9';
+    const MAX_LINES_PER_SLIDE = 15;
+
+    let slidesToProcess = [...slides];
     
-    slides.forEach(slide => {
+    while(slidesToProcess.length > 0) {
+        const currentSlideData = slidesToProcess.shift();
+        if(!currentSlideData) continue;
+
+        let { title, content } = currentSlideData;
+        
+        const lines = content.split('\n').filter(line => line.trim() !== '');
+
+        if (lines.length > MAX_LINES_PER_SLIDE) {
+            const currentSlideLines = lines.slice(0, MAX_LINES_PER_SLIDE);
+            const nextSlideLines = lines.slice(MAX_LINES_PER_SLIDE);
+
+            content = currentSlideLines.join('\n');
+            
+            const nextSlide: Slide = {
+                title: `${title} (Cont.)`,
+                content: nextSlideLines.join('\n')
+            };
+            slidesToProcess.unshift(nextSlide);
+            
+            if(!title.includes('(Cont.)')) {
+              title = `${title} (Continued...)`
+            }
+        }
+        
         const pptxSlide = pptx.addSlide();
         
-        pptxSlide.addText(slide.title, { 
-            x: 0.5, y: 0.25, w: '90%', h: 1, 
-            fontSize: 24, bold: true, color: '3B5998', align: 'left'
+        pptxSlide.addText(title, { 
+            x: 0.5, y: 0.25, w: '90%', h: 0.75, 
+            fontSize: 32, bold: true, color: '3B5998', align: 'left'
         });
         
-        const contentPoints = slide.content
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line.startsWith('- '))
-          .map(line => line.substring(2).trim());
+        let isParsingTable = false;
+        let tableData: (pptxgen.TextProps[])[] = [];
+        let yPos = 1.2;
 
-        if (contentPoints.length > 0) {
-            pptxSlide.addText(contentPoints.join('\n'), { 
-                x: 0.5, 
-                y: 1.5, 
-                w: '90%', 
-                h: '75%', 
-                bullet: true, 
-                fontSize: 18,
-            });
+        const processTable = () => {
+            if (tableData.length > 0) {
+                pptxSlide.addTable(tableData, {
+                    x: 0.5, y: yPos, w: 9.0, autoPage: true,
+                    border: { type: 'solid', pt: 1, color: 'D9D9D9' },
+                    rowH: 0.4,
+                });
+                yPos += (tableData.length * 0.4) + 0.2;
+                tableData = [];
+            }
         }
-    });
+
+        const bulletPoints: { text: string, options?: pptxgen.TextProps }[] = [];
+
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('|')) {
+                if(!isParsingTable && bulletPoints.length > 0) {
+                  pptxSlide.addText(bulletPoints, { x: 0.5, y: yPos, w: '90%', h: 'auto', bullet: true, fontSize: 18, paraSpaceAfter: 8 });
+                  bulletPoints.length = 0; // Clear the array
+                }
+                isParsingTable = true;
+                const cells = trimmedLine.split('|').slice(1, -1).map(cell => cell.trim());
+                if (!trimmedLine.includes('--')) { // Not a separator line
+                    tableData.push(cells.map(text => ({ text })));
+                }
+            } else {
+                if (isParsingTable) {
+                    processTable();
+                    isParsingTable = false;
+                }
+                if (trimmedLine.startsWith('- ')) {
+                    const textContent = trimmedLine.substring(2);
+                    const parsedText = parseTextToPptxObjects(textContent);
+                    if (bulletPoints.length > 0) {
+                        bulletPoints.push({ text: '\n' }); // Add space between bullets
+                    }
+                    bulletPoints.push(...parsedText);
+                }
+            }
+        });
+        
+        processTable(); // Process any remaining table
+        
+        if (bulletPoints.length > 0) {
+            pptxSlide.addText(bulletPoints, { x: 0.5, y: yPos, w: '90%', h: 'auto', bullet: true, fontSize: 18, paraSpaceAfter: 8 });
+        }
+    }
 
     pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
   };
+
 
   const allSelected = selectedIndices.length > 0 && selectedIndices.length === slides.length;
   const someSelected = selectedIndices.length > 0 && selectedIndices.length < slides.length;

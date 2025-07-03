@@ -12,8 +12,15 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const AiDiagnosisInputSchema = z.object({
-  patientData: z.string().describe('The patient data, including symptoms, medical history, and other relevant information.'),
+  patientData: z.string().describe('The patient data, including symptoms, medical history, and other relevant information.').optional(),
   supportingDocuments: z.array(z.string()).optional().describe('Optional supporting documents in PDF or JPG format, encoded as data URIs.'),
+}).superRefine((data, ctx) => {
+    if (!data.patientData && (!data.supportingDocuments || data.supportingDocuments.length === 0)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Either patient data or a supporting document must be provided.",
+        });
+    }
 });
 export type AiDiagnosisInput = z.infer<typeof AiDiagnosisInputSchema>;
 
@@ -41,7 +48,9 @@ const prompt = ai.definePrompt({
   For each diagnosis, explain the reasoning behind it, highlighting details extracted from the patient data.
   Also, identify any missing information or tests needed for a more accurate diagnosis.
 
+  {{#if patientData}}
   Patient Data: {{{patientData}}}
+  {{/if}}
 
   {{#if supportingDocuments}}
   Supporting Documents:

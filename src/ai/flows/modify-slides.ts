@@ -35,6 +35,8 @@ const prompt = ai.definePrompt({
   output: {schema: ModifySlidesOutputSchema},
   prompt: `You are an AI assistant for creating medical presentations. You will be given an array of presentation slides, the indices of selected slides, and an action to perform on them. Your task is to modify the slides and return the complete, updated array of all slides.
 
+IMPORTANT: The 'content' of each slide is in markdown format. You MUST preserve this format in your output. Use **Bold Text** for emphasis and markdown pipe tables for data.
+
 ACTION: {{{action}}}
 
 CURRENT SLIDES:

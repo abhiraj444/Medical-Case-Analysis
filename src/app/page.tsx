@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
-import { Bot, FileText, Loader2, Mic, Upload } from 'lucide-react';
+import { Bot, FileText, Loader2, Upload } from 'lucide-react';
 
 export default function DiagnosisPage() {
   const [patientData, setPatientData] = useState('');
@@ -37,10 +37,10 @@ export default function DiagnosisPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!patientData.trim()) {
+    if (!patientData.trim() && files.length === 0) {
       toast({
         title: 'Input Required',
-        description: 'Please enter patient history and clinical questions.',
+        description: 'Please enter patient history or upload a supporting document.',
         variant: 'destructive',
       });
       return;
@@ -52,8 +52,8 @@ export default function DiagnosisPage() {
     try {
       const supportingDocuments = await Promise.all(files.map(fileToDataUri));
       const diagnosisResults = await aiDiagnosis({
-        patientData,
-        supportingDocuments,
+        patientData: patientData.trim() ? patientData : undefined,
+        supportingDocuments: supportingDocuments.length > 0 ? supportingDocuments : undefined,
       });
       setResults(diagnosisResults);
     } catch (error) {
@@ -91,7 +91,7 @@ export default function DiagnosisPage() {
                 </Label>
                 <Textarea
                   id="patient-data"
-                  placeholder="e.g., A 58-year-old male presents with a two-week history of persistent, dry cough..."
+                  placeholder="e.g., A 58-year-old male presents with a two-week history of persistent, dry cough... (Optional if a document is uploaded)"
                   className="min-h-[200px]"
                   value={patientData}
                   onChange={(e) => setPatientData(e.target.value)}
@@ -109,13 +109,9 @@ export default function DiagnosisPage() {
                     onChange={handleFileChange}
                     disabled={isLoading}
                   />
-                  <Button variant="outline" size="icon" disabled>
-                    <Mic className="h-4 w-4" />
-                    <span className="sr-only">Use voice input</span>
-                  </Button>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Upload PDFs or JPGs.
+                  Upload PDFs or JPGs/PNGs.
                 </p>
                 {files.length > 0 && (
                   <div className="space-y-1 pt-2">
@@ -130,7 +126,7 @@ export default function DiagnosisPage() {
                   </div>
                 )}
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || (!patientData.trim() && files.length === 0)}>
                 {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
