@@ -20,7 +20,9 @@ export const ModifySlidesInputSchema = z.object({
   action: z.enum(['expand_content', 'replace_content', 'expand_selected']).describe('The modification action to perform.'),
 });
 export type ModifySlidesInput = z.infer<typeof ModifySlidesInputSchema>;
-export type ModifySlidesOutput = z.infer<typeof z.array(SlideSchema)>;
+
+const ModifySlidesOutputSchema = z.array(SlideSchema);
+export type ModifySlidesOutput = z.infer<typeof ModifySlidesOutputSchema>;
 
 
 export async function modifySlides(input: ModifySlidesInput): Promise<ModifySlidesOutput> {
@@ -30,7 +32,7 @@ export async function modifySlides(input: ModifySlidesInput): Promise<ModifySlid
 const prompt = ai.definePrompt({
   name: 'modifySlidesPrompt',
   input: {schema: ModifySlidesInputSchema},
-  output: {schema: z.array(SlideSchema)},
+  output: {schema: ModifySlidesOutputSchema},
   prompt: `You are an AI assistant for creating medical presentations. You will be given an array of presentation slides, the indices of selected slides, and an action to perform on them. Your task is to modify the slides and return the complete, updated array of all slides.
 
 ACTION: {{{action}}}
@@ -65,7 +67,7 @@ const modifySlidesFlow = ai.defineFlow(
   {
     name: 'modifySlidesFlow',
     inputSchema: ModifySlidesInputSchema,
-    outputSchema: z.array(SlideSchema),
+    outputSchema: ModifySlidesOutputSchema,
   },
   async (input) => {
     const {output} = await prompt(input);
