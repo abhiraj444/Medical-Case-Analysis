@@ -164,132 +164,139 @@ export function SlideEditor({
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_16x9';
 
-    const MAX_LINES_PER_SLIDE = 12; // Max content lines to avoid overflow
+    const parseBold = (text: string): PptxGenJS.TextProps[] =>
+      text
+        .split(/(\*\*.*?\*\*)/g)
+        .filter(Boolean)
+        .map((segment) => {
+          if (segment.startsWith('**') && segment.endsWith('**')) {
+            return { text: segment.slice(2, -2), options: { bold: true } };
+          }
+          return { text: segment, options: {} };
+        });
 
-    const addSlideWithContent = (
-      title: string,
-      lines: string[],
-      isContinued: boolean
-    ) => {
-      const slide = pptx.addSlide();
+    const renderContentOnSlide = (slide: PptxGenJS.Slide, lines: string[]): string[] => {
+        const Y_LIMIT = 5.2;
+        const CONTENT_START_Y = 1.25;
+        const LINE_HEIGHT_INCH = 0.3;
+        const TABLE_ROW_HEIGHT_INCH = 0.4;
+        const BLOCK_SPACING_INCH = 0.2;
 
-      // 1. Add Slide Title
-      slide.addText(isContinued ? `${title} (Continued)` : title, {
-        x: 0.5, y: 0.25, w: '90%', h: 0.75,
-        fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial',
-      });
+        let yPos = CONTENT_START_Y;
+        let lineIdx = 0;
 
-      const parseBold = (text: string): PptxGenJS.TextProps[] =>
-        text
-          .split(/(\*\*.*?\*\*)/g)
-          .filter((p) => p)
-          .map((segment) => {
-            if (segment.startsWith('**') && segment.endsWith('**')) {
-              return { text: segment.slice(2, -2), options: { bold: true } };
+        while (lineIdx < lines.length) {
+            const currentBlockStartIndex = lineIdx;
+            const isTable = lines[lineIdx].trim().startsWith('|');
+
+            if (isTable) {
+                let tableBlockLines: string[] = [];
+                while (lineIdx < lines.length && lines[lineIdx].trim().startsWith('|')) {
+                    tableBlockLines.push(lines[lineIdx]);
+                    lineIdx++;
+                }
+
+                const tableData = tableBlockLines
+                    .filter((row) => !row.includes('--'))
+                    .map((row) => row.split('|').slice(1, -1).map((cell) => ({ text: cell.trim() })));
+
+                const tableHeight = tableData.length * TABLE_ROW_HEIGHT_INCH;
+                if (yPos + tableHeight > Y_LIMIT && yPos > CONTENT_START_Y) {
+                    return lines.slice(currentBlockStartIndex);
+                }
+
+                slide.addTable(tableData, {
+                    x: 0.5, y: yPos, w: 9.0,
+                    border: { type: 'solid', pt: 1, color: 'D9D9D9' },
+                    fontSize: 14, fontFace: 'Arial', rowH: TABLE_ROW_HEIGHT_INCH,
+                });
+                yPos += tableHeight + BLOCK_SPACING_INCH;
+
+            } else {
+                let textBlockLines: string[] = [];
+                while (lineIdx < lines.length && !lines[lineIdx].trim().startsWith('|')) {
+                    textBlockLines.push(lines[lineIdx]);
+                    lineIdx++;
+                }
+                
+                let tempY = yPos;
+                const linesThatFit: string[] = [];
+                for (const line of textBlockLines) {
+                    if (tempY + LINE_HEIGHT_INCH > Y_LIMIT && linesThatFit.length > 0) {
+                        break;
+                    }
+                    linesThatFit.push(line);
+                    tempY += LINE_HEIGHT_INCH;
+                }
+
+                if (linesThatFit.length > 0) {
+                    const richText: PptxGenJS.TextProps[] = [];
+                    linesThatFit.forEach((line, index) => {
+                        const indentLevel = Math.floor(line.search(/\S|$/) / 2);
+                        const content = line.trim().replace(/^(- |^\d+\.\s)/, '');
+                        const isBulleted = line.trim().startsWith('-') || /^\d+\.\s/.test(line.trim());
+
+                        const richSegments = parseBold(content);
+                        richSegments.forEach((segment, segIndex) => {
+                            richText.push({
+                                ...segment,
+                                options: {
+                                    ...segment.options,
+                                    ...(segIndex === 0 && isBulleted && { bullet: { indent: 20 + indentLevel * 20 } }),
+                                },
+                            });
+                        });
+                        if (index < linesThatFit.length - 1) {
+                            richText.push({ text: '\n' });
+                        }
+                    });
+
+                    slide.addText(richText, {
+                        x: 0.5, y: yPos, w: 9.0, h: tempY - yPos,
+                        fontSize: 18, fontFace: 'Arial', color: '363636', lineSpacing: 28,
+                    });
+                    yPos = tempY + BLOCK_SPACING_INCH;
+                }
+
+                const remainingInBlock = textBlockLines.length - linesThatFit.length;
+                if (remainingInBlock > 0) {
+                    return lines.slice(currentBlockStartIndex + linesThatFit.length);
+                }
             }
-            return { text: segment, options: {} };
-          });
-
-      let yPos = 1.25; // Initial Y position for content
-
-      // 2. Process content line by line to handle mixed-type blocks
-      let currentBulletBlock: string[] = [];
-      let currentTableBlock: PptxGenJS.TableRow[] = [];
-
-      const flushBulletBlock = () => {
-        if (currentBulletBlock.length === 0) return;
-        
-        currentBulletBlock.forEach(line => {
-          if (yPos > 5.0) return; // Stop if we're running out of space
-
-          const indent = line.match(/^\s*/)?.[0].length ?? 0;
-          const level = Math.floor(indent / 2);
-          const isNumbered = /^\d+\.\s/.test(line.trim());
-          const isBulleted = line.trim().startsWith('-');
-          
-          let contentText = line.trim();
-          if (isNumbered) contentText = contentText.replace(/^\d+\.\s/, '');
-          else if (isBulleted) contentText = contentText.substring(2);
-
-          const richText = parseBold(contentText);
-          
-          slide.addText(richText, {
-            x: 0.5 + (level * 0.25),
-            y: yPos,
-            w: 9.0 - (level * 0.25),
-            h: 0.3,
-            fontSize: 18,
-            fontFace: 'Arial',
-            color: '363636',
-            lineSpacingMultiple: 1.2,
-            bullet: (isBulleted || isNumbered) ? { type: isNumbered ? 'number' : 'bullet' } : false
-          });
-          yPos += 0.35; // Increment Y position for the next line
-        });
-        currentBulletBlock = [];
-      };
-
-      const flushTableBlock = () => {
-        if (currentTableBlock.length === 0) return;
-        if (yPos > 5.0) return;
-        
-        slide.addTable(currentTableBlock, {
-            x: 0.5, y: yPos, w: 9.0,
-            border: { type: 'solid', pt: 1, color: 'D9D9D9' },
-            fontSize: 14, fontFace: 'Arial',
-            rowH: 0.4,
-        });
-        yPos += (currentTableBlock.length * 0.4) + 0.2;
-        currentTableBlock = [];
-      };
-
-      for (const line of lines) {
-        if (line.trim().startsWith('|')) {
-          flushBulletBlock();
-          if (!line.includes('--')) {
-            const cells = line.split('|').slice(1, -1).map(cell => ({ text: cell.trim() }));
-            currentTableBlock.push(cells);
-          }
-        } else {
-          flushTableBlock();
-          if (line.trim()) {
-            currentBulletBlock.push(line);
-          }
         }
-      }
-      flushBulletBlock();
-      flushTableBlock();
-
-      // 3. Add Continued Footer if necessary
-      if (isContinued) {
-        slide.addText('(Continued...)', {
-          x: '85%', y: '92%', w: '15%', h: '8%',
-          fontSize: 12, italic: true, color: '999999', align: 'right'
-        });
-      }
+        return [];
     };
 
-    // Main logic: iterate through user's slides and split if necessary
-    slides.forEach((slide) => {
-      const allLines = slide.content.split('\n').filter((line) => line.trim() !== '');
-      if (allLines.length === 0) {
-        // Create slide with only a title if content is empty
-        addSlideWithContent(slide.title, [], false);
+    slides.forEach((slideData) => {
+      const { title, content } = slideData;
+      let linesToProcess = content.split('\n').filter((line) => line.trim() !== '');
+
+      if (linesToProcess.length === 0) {
+        const slide = pptx.addSlide();
+        slide.addText(title, { x: 0.5, y: 0.25, w: '90%', h: 0.75, fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial' });
         return;
       }
 
-      let isFirstBatch = true;
-      for (let i = 0; i < allLines.length; i += MAX_LINES_PER_SLIDE) {
-        const batch = allLines.slice(i, i + MAX_LINES_PER_SLIDE);
-        addSlideWithContent(slide.title, batch, !isFirstBatch);
-        isFirstBatch = false;
+      let isFirstPhysicalSlide = true;
+      while (linesToProcess.length > 0) {
+        const slide = pptx.addSlide();
+        const slideTitle = title + (isFirstPhysicalSlide ? '' : ' (Continued)');
+        slide.addText(slideTitle, { x: 0.5, y: 0.25, w: '90%', h: 0.75, fontSize: 32, bold: true, color: '3B5998', fontFace: 'Arial' });
+        
+        const remainingLines = renderContentOnSlide(slide, linesToProcess);
+        
+        if (remainingLines.length > 0) {
+          slide.addText('(Continued...)', { x: '85%', y: '92%', w: '15%', h: '8%', fontSize: 12, italic: true, color: '999999', align: 'right' });
+        }
+        
+        linesToProcess = remainingLines;
+        isFirstPhysicalSlide = false;
       }
     });
 
-    pptx.writeFile({
-      fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx`,
-    });
+    pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
   };
+
 
   const allSelected =
     selectedIndices.length > 0 && selectedIndices.length === slides.length;
