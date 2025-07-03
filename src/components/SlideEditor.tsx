@@ -135,12 +135,10 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
         
         let lines = content.split('\n').filter(line => line.trim() !== '');
 
-        // Handle content overflow
         if (lines.length > MAX_LINES_PER_SLIDE && !title.includes('(Continued)')) {
             const currentSlideLines = lines.slice(0, MAX_LINES_PER_SLIDE);
             const nextSlideLines = lines.slice(MAX_LINES_PER_SLIDE);
 
-            content = currentSlideLines.join('\n');
             lines = currentSlideLines;
             
             const nextSlide: Slide = {
@@ -159,14 +157,15 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
         
         let yPos = 1.25;
 
-        // Helper to parse **bold** text
-        const parseBold = (text: string): { text: string; options?: pptxgen.TextProps }[] => {
+        // Helper to parse **bold** text, ensuring it never causes a runtime error.
+        const parseBold = (text: string): { text: string; options: pptxgen.TextProps }[] => {
             const segments = text.split(/(\*\*.*?\*\*)/g).filter(p => p);
+            if (segments.length === 0) return [{ text: '', options: {} }];
             return segments.map(segment => {
                 if (segment.startsWith('**') && segment.endsWith('**')) {
                     return { text: segment.slice(2, -2), options: { bold: true } };
                 }
-                return { text: segment };
+                return { text: segment, options: {} }; // Always return an options object
             });
         };
 
@@ -177,6 +176,7 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
             if (currentBulletBlock.length > 0) {
                 const textObjects = currentBulletBlock.flatMap((item, index) => {
                     const parsed = parseBold(item.text);
+                    // This is now safe as parseBold always returns an options object.
                     parsed[0].options = { ...parsed[0].options, ...item.options };
                     if (index > 0) {
                        parsed.unshift({ text: '\n', options: {} });
@@ -184,9 +184,9 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
                     return parsed;
                 });
 
-                const textbox = pptxSlide.addText(textObjects, { x: 0.5, y: yPos, w: '90%', fontSize: 18, paraSpaceAfter: 8 });
-                // A rough estimation of height. A more accurate way is not easily available.
-                yPos += (lines.length * 0.3) + 0.2;
+                pptxSlide.addText(textObjects, { x: 0.5, y: yPos, w: '90%', fontSize: 18, paraSpaceAfter: 8 });
+                // Correctly estimate height based on the number of bullet points, not total slide lines.
+                yPos += (currentBulletBlock.length * 0.3) + 0.2;
                 currentBulletBlock = [];
             }
         };
