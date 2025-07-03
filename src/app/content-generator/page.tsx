@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ChangeEvent } from 'react';
+import { useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { generateSlideOutline } from '@/ai/flows/generate-slide-outline';
 import { answerClinicalQuestion, type AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,28 @@ export default function ContentGeneratorPage() {
     } else {
       setImageFile(null);
       setImagePreview(null);
+    }
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            const file = items[i].getAsFile();
+            if (file) {
+                setImageFile(file);
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setImagePreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+                toast({
+                    title: "Image Pasted",
+                    description: `Pasted image from clipboard.`,
+                });
+                break; // Stop after finding the first image
+            }
+        }
     }
   };
 
@@ -166,9 +188,10 @@ export default function ContentGeneratorPage() {
                     <Label htmlFor="question">Clinical Question (optional if image is provided)</Label>
                     <Textarea
                       id="question"
-                      placeholder="e.g., 'What are the treatment options for a 65-year-old male with newly diagnosed atrial fibrillation?'"
+                      placeholder="e.g., 'What are the treatment options for this condition?' You can also paste an image from your clipboard here."
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
+                      onPaste={handlePaste}
                       disabled={isLoading}
                       className="min-h-[100px]"
                     />

@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import type { ChangeEvent } from 'react';
+import { useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { aiDiagnosis, type AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +22,23 @@ export default function DiagnosisPage() {
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       setFiles(Array.from(event.target.files));
+    }
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          setFiles(prevFiles => [...prevFiles, file]);
+          toast({
+            title: "Image Pasted",
+            description: `An image from the clipboard has been added to supporting documents.`,
+          });
+          break; // Only handle the first image found
+        }
+      }
     }
   };
 
@@ -80,7 +96,7 @@ export default function DiagnosisPage() {
             </CardTitle>
             <CardDescription>
               Provide clinical questions and patient history. You can also
-              upload supporting documents.
+              upload or paste supporting documents.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -91,10 +107,11 @@ export default function DiagnosisPage() {
                 </Label>
                 <Textarea
                   id="patient-data"
-                  placeholder="e.g., A 58-year-old male presents with a two-week history of persistent, dry cough... (Optional if a document is uploaded)"
+                  placeholder="e.g., A 58-year-old male presents with a two-week history of persistent, dry cough... You can also paste an image from your clipboard here."
                   className="min-h-[200px]"
                   value={patientData}
                   onChange={(e) => setPatientData(e.target.value)}
+                  onPaste={handlePaste}
                   disabled={isLoading}
                 />
               </div>
@@ -111,16 +128,22 @@ export default function DiagnosisPage() {
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Upload PDFs or JPGs/PNGs.
+                  Upload PDFs or images, or paste an image into the text area above.
                 </p>
                 {files.length > 0 && (
-                  <div className="space-y-1 pt-2">
+                   <div className="mt-4 space-y-3 rounded-md border p-4">
+                     <p className="text-sm font-medium">Attached files:</p>
                     {files.map((file, i) => (
                       <div
                         key={i}
-                        className="text-sm text-muted-foreground"
+                        className="flex items-center gap-3 text-sm text-muted-foreground"
                       >
-                        - {file.name}
+                         {file.type.startsWith('image/') ? (
+                             <img src={URL.createObjectURL(file)} alt={file.name} className="h-16 w-16 object-cover rounded-md border" />
+                        ) : (
+                            <FileText className="h-10 w-10 text-slate-500" />
+                        )}
+                        <span className="truncate">{file.name}</span>
                       </div>
                     ))}
                   </div>
