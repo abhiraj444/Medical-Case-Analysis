@@ -18,28 +18,28 @@ export type GenerateSlideOutlineInput = z.infer<typeof GenerateSlideOutlineInput
 
 // Schemas for structured content
 const ParagraphSchema = z.object({
-  type: z.literal('paragraph'),
+  type: z.enum(['paragraph']),
   text: z.string().describe('A paragraph of text.'),
   bold: z.array(z.string()).optional().describe('An array of substrings from the text to be bolded.'),
 });
 
 const BulletListSchema = z.object({
-  type: z.literal('bullet_list'),
+  type: z.enum(['bullet_list']),
   items: z.array(z.string()).describe('An array of strings, where each string is a bullet point.'),
 });
 
 const NumberedListSchema = z.object({
-  type: z.literal('numbered_list'),
+  type: z.enum(['numbered_list']),
   items: z.array(z.string()).describe('An array of strings, where each string is a numbered list item.'),
 });
 
 const NoteSchema = z.object({
-  type: z.literal('note'),
+  type: z.enum(['note']),
   text: z.string().describe('A short note or annotation.'),
 });
 
 const TableSchema = z.object({
-  type: z.literal('table'),
+  type: z.enum(['table']),
   headers: z.array(z.string()).describe('An array of strings for the table headers.'),
   rows: z.array(z.array(z.string())).describe('An array of arrays, where each inner array represents a table row.'),
 });

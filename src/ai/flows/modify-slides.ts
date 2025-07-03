@@ -11,28 +11,28 @@ import {z} from 'genkit';
 
 // Schemas for structured content
 const ParagraphSchema = z.object({
-  type: z.literal('paragraph'),
+  type: z.enum(['paragraph']),
   text: z.string(),
   bold: z.array(z.string()).optional(),
 });
 
 const BulletListSchema = z.object({
-  type: z.literal('bullet_list'),
+  type: z.enum(['bullet_list']),
   items: z.array(z.string()),
 });
 
 const NumberedListSchema = z.object({
-  type: z.literal('numbered_list'),
+  type: z.enum(['numbered_list']),
   items: z.array(z.string()),
 });
 
 const NoteSchema = z.object({
-  type: z.literal('note'),
+  type: z.enum(['note']),
   text: z.string(),
 });
 
 const TableSchema = z.object({
-  type: z.literal('table'),
+  type: z.enum(['table']),
   headers: z.array(z.string()),
   rows: z.array(z.array(z.string())),
 });
