@@ -47,7 +47,6 @@ import {
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
-import { Badge } from './ui/badge';
 
 // Data structures for the structured JSON content
 interface Paragraph {
@@ -282,6 +281,39 @@ export function SlideEditor({
 
       let y = 1.25;
 
+      const buildRichText = (text: string, boldWords: string[] = []): PptxGenJS.TextProps[] => {
+        if (!boldWords?.length) {
+            return [{ text }];
+        }
+    
+        const textObjects: PptxGenJS.TextProps[] = [];
+        // Create a regex that is case-insensitive and global
+        const regex = new RegExp(`(${boldWords.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+        
+        let lastIndex = 0;
+        let match;
+    
+        // Find all matches
+        while ((match = regex.exec(text)) !== null) {
+            // Add the text before the match
+            if (match.index > lastIndex) {
+                textObjects.push({ text: text.substring(lastIndex, match.index) });
+            }
+            // Add the bolded match
+            if (match[0]) { // Ensure not to push empty matches
+              textObjects.push({ text: match[0], options: { bold: true } });
+            }
+            lastIndex = regex.lastIndex;
+        }
+    
+        // Add any remaining text after the last match
+        if (lastIndex < text.length) {
+            textObjects.push({ text: text.substring(lastIndex) });
+        }
+    
+        return textObjects.length > 0 ? textObjects : [{ text }];
+      };
+
       slideData.content.forEach(item => {
         if (y > 5.0) { // Check before adding content
             slide.addText('(Continued...)', {
@@ -298,20 +330,7 @@ export function SlideEditor({
 
         switch (item.type) {
             case 'paragraph': {
-                const textObjects: PptxGenJS.TextProps[] = [];
-                if (!item.bold || item.bold.length === 0) {
-                    textObjects.push({ text: item.text });
-                } else {
-                    const regex = new RegExp(`(${item.bold.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
-                    const parts = item.text.split(regex);
-                    parts.forEach(part => {
-                        if (item.bold?.includes(part)) {
-                            textObjects.push({ text: part, options: { bold: true } });
-                        } else {
-                            textObjects.push({ text: part });
-                        }
-                    });
-                }
+                const textObjects = buildRichText(item.text, item.bold);
                 slide.addText(textObjects, { x: 0.5, y, w: 9.0, h: 0.5, fontSize: 18, fontFace: 'Arial' });
                 y += 0.5; // Approximate height for a paragraph
                 break;
@@ -333,7 +352,10 @@ export function SlideEditor({
                 y += 0.4;
                 break;
             case 'table': {
-                const tableRows = [item.headers.map(h => ({text: h, options: {bold: true}})), ...item.rows];
+                const headerRow = item.headers.map(h => ({ text: h, options: { bold: true } }));
+                const bodyRows = item.rows.map(row => row.map(cell => ({ text: cell || '' })));
+                const tableRows = [headerRow, ...bodyRows];
+
                 slide.addTable(tableRows, { x: 0.5, y, w: 9.0, rowH: 0.3, border: { type: 'solid', pt: 1, color: 'D9D9D9' }});
                 y += (item.rows.length + 1) * 0.3;
                 break;
