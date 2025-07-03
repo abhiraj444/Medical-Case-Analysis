@@ -32,33 +32,28 @@ const prompt = ai.definePrompt({
   name: 'generateSlideOutlinePrompt',
   input: {schema: GenerateSlideOutlineInputSchema},
   output: {schema: GenerateSlideOutlineOutputSchema},
-  prompt: `You are an expert in medical education. Your task is to generate a detailed slide outline for a presentation on the given topic.
+  prompt: `You are an expert in medical education. Your task is to generate a detailed slide outline for a presentation on the given topic. The content should be technically rich, detailed, and suitable for a professional medical audience.
 
 Topic: {{{topic}}}
 
-Follow these rules STRICTLY:
-1.  The output must be a JSON array of slide objects. Each object must have a "title" and a "content" field.
-2.  The "content" must be a string formatted with markdown.
-3.  Use markdown bullet points, starting each with "- ". Use "\\n" for new lines.
-4.  To make text bold, enclose it in double asterisks, like this: **Bold Text**.
-5.  To create a table, use markdown pipe syntax. The header MUST be separated by a line of hyphens. Text inside tables should NOT be formatted with bold markdown. Example:
-    | Header 1 | Header 2 |
-    |----------|----------|
-    | Data A   | Data B   |
-    | Data C   | Data D   |
-6.  Keep the content for each slide concise. Aim for a maximum of 5-6 bullet points or one small table per slide. DO NOT create slides with excessive content.
+Follow these rules STRICTLY for the "content" of each slide:
+1.  **Format**: The output must be a JSON array of slide objects. Each object must have a "title" and a "content" field.
+2.  **Content Detail**: Each bullet point should be a full, descriptive sentence or a detailed phrase. Avoid overly concise or short points. Incorporate technical terminology where appropriate.
+3.  **Markdown Formatting**:
+    - Use "\\n" for new lines.
+    - For bullet points, start the line with "- ".
+    - For **nested bullet points**, indent the line with two spaces (e.g., "  - Nested item").
+    - For **numbered lists**, use the format "1. ", "2. ", etc.
+    - To make text **bold**, enclose it in double asterisks, like this: **Bold Text**.
+    - To create a **table**, use markdown pipe syntax. The header MUST be separated by a line of hyphens. Text inside tables should NOT be formatted with bold markdown. Example:
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Data A   | Data B   |
+      | Data C   | Data D   |
+4.  **Structure**: Create a logical flow. Do not cram too much information onto one slide. If a topic is complex, break it into multiple slides.
 
-Example Output:
-[
-  {
-    "title": "Introduction to **Type 2 Diabetes**",
-    "content": "- Definition and prevalence\\n- Risk factors and pathophysiology\\n- **Key difference** from Type 1"
-  },
-  {
-    "title": "Diagnosis and Screening",
-    "content": "- Diagnostic criteria (A1C, FPG, OGTT)\\n- Recommendations for screening\\n- Table of diagnostic thresholds:\\n| Test | Normal | Prediabetes | Diabetes |\\n|------|--------|-------------|----------|\\n| A1C  | <5.7%  | 5.7-6.4%    | >=6.5%   |\\n| FPG  | <100   | 100-125     | >=126    |"
-  }
-]
+Example of expected "content" format:
+"- This is the first main bullet point providing a detailed explanation of a concept.\\n- This is another point, with **important terms** highlighted.\\n  - This is a nested bullet point, providing more detail on the point above.\\n  - Another nested point elaborating further.\\n- The presentation continues with a final point on this slide."
 `,
 });
 

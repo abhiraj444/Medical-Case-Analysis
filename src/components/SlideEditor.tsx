@@ -120,18 +120,8 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
     }
   }
 
-  const parseTextToPptxObjects = (text: string): { text: string; options?: pptxgen.TextProps }[] => {
-    const segments = text.split(/(\*\*.*?\*\*)/g).filter(p => p);
-    return segments.map(segment => {
-      if (segment.startsWith('**') && segment.endsWith('**')) {
-        return { text: segment.slice(2, -2), options: { bold: true } };
-      }
-      return { text: segment };
-    });
-  };
-
   const handleExport = () => {
-    const pptx = new pptxgen();
+    const pptx = new pptxgenjs();
     pptx.layout = 'LAYOUT_16x9';
     const MAX_LINES_PER_SLIDE = 15;
 
@@ -143,23 +133,21 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
 
         let { title, content } = currentSlideData;
         
-        const lines = content.split('\n').filter(line => line.trim() !== '');
+        let lines = content.split('\n').filter(line => line.trim() !== '');
 
-        if (lines.length > MAX_LINES_PER_SLIDE) {
+        // Handle content overflow
+        if (lines.length > MAX_LINES_PER_SLIDE && !title.includes('(Continued)')) {
             const currentSlideLines = lines.slice(0, MAX_LINES_PER_SLIDE);
             const nextSlideLines = lines.slice(MAX_LINES_PER_SLIDE);
 
             content = currentSlideLines.join('\n');
+            lines = currentSlideLines;
             
             const nextSlide: Slide = {
-                title: `${title} (Cont.)`,
+                title: `${title} (Continued)`,
                 content: nextSlideLines.join('\n')
             };
             slidesToProcess.unshift(nextSlide);
-            
-            if(!title.includes('(Cont.)')) {
-              title = `${title} (Continued...)`
-            }
         }
         
         const pptxSlide = pptx.addSlide();
@@ -169,57 +157,83 @@ export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onS
             fontSize: 32, bold: true, color: '3B5998', align: 'left'
         });
         
-        let isParsingTable = false;
-        let tableData: (pptxgen.TextProps[])[] = [];
-        let yPos = 1.2;
+        let yPos = 1.25;
 
-        const processTable = () => {
-            if (tableData.length > 0) {
-                pptxSlide.addTable(tableData, {
-                    x: 0.5, y: yPos, w: 9.0, autoPage: true,
+        // Helper to parse **bold** text
+        const parseBold = (text: string): { text: string; options?: pptxgen.TextProps }[] => {
+            const segments = text.split(/(\*\*.*?\*\*)/g).filter(p => p);
+            return segments.map(segment => {
+                if (segment.startsWith('**') && segment.endsWith('**')) {
+                    return { text: segment.slice(2, -2), options: { bold: true } };
+                }
+                return { text: segment };
+            });
+        };
+
+        let currentBulletBlock: { text: string; options: pptxgen.TextProps }[] = [];
+        let currentTableBlock: (pptxgen.TextProps[])[][] = [];
+
+        const flushBulletBlock = () => {
+            if (currentBulletBlock.length > 0) {
+                const textObjects = currentBulletBlock.flatMap((item, index) => {
+                    const parsed = parseBold(item.text);
+                    parsed[0].options = { ...parsed[0].options, ...item.options };
+                    if (index > 0) {
+                       parsed.unshift({ text: '\n', options: {} });
+                    }
+                    return parsed;
+                });
+
+                const textbox = pptxSlide.addText(textObjects, { x: 0.5, y: yPos, w: '90%', fontSize: 18, paraSpaceAfter: 8 });
+                // A rough estimation of height. A more accurate way is not easily available.
+                yPos += (lines.length * 0.3) + 0.2;
+                currentBulletBlock = [];
+            }
+        };
+
+        const flushTableBlock = () => {
+             if (currentTableBlock.length > 0) {
+                pptxSlide.addTable(currentTableBlock, {
+                    x: 0.5, y: yPos, w: 9.0,
                     border: { type: 'solid', pt: 1, color: 'D9D9D9' },
                     rowH: 0.4,
+                    autoPage: false
                 });
-                yPos += (tableData.length * 0.4) + 0.2;
-                tableData = [];
+                yPos += (currentTableBlock.length * 0.4) + 0.2;
+                currentTableBlock = [];
             }
         }
-
-        const bulletPoints: { text: string, options?: pptxgen.TextProps }[] = [];
-
-        lines.forEach(line => {
+        
+        for (const line of lines) {
             const trimmedLine = line.trim();
             if (trimmedLine.startsWith('|')) {
-                if(!isParsingTable && bulletPoints.length > 0) {
-                  pptxSlide.addText(bulletPoints, { x: 0.5, y: yPos, w: '90%', h: 'auto', bullet: true, fontSize: 18, paraSpaceAfter: 8 });
-                  bulletPoints.length = 0; // Clear the array
+                flushBulletBlock();
+                const cells = trimmedLine.split('|').slice(1, -1).map(cell => ({ text: cell.trim() }));
+                if (!trimmedLine.includes('--')) {
+                    currentTableBlock.push(cells);
                 }
-                isParsingTable = true;
-                const cells = trimmedLine.split('|').slice(1, -1).map(cell => cell.trim());
-                if (!trimmedLine.includes('--')) { // Not a separator line
-                    tableData.push(cells.map(text => ({ text })));
+            } else if (trimmedLine) {
+                flushTableBlock();
+                const indent = line.match(/^\s*/)?.[0].length ?? 0;
+                const isNumbered = /^\d+\.\s/.test(trimmedLine);
+                const bulletType = isNumbered ? 'number' : 'bullet';
+                
+                let contentText = trimmedLine;
+                if (isNumbered) {
+                    contentText = contentText.replace(/^\d+\.\s/, '');
+                } else if (trimmedLine.startsWith('- ')) {
+                    contentText = contentText.substring(2);
                 }
-            } else {
-                if (isParsingTable) {
-                    processTable();
-                    isParsingTable = false;
-                }
-                if (trimmedLine.startsWith('- ')) {
-                    const textContent = trimmedLine.substring(2);
-                    const parsedText = parseTextToPptxObjects(textContent);
-                    if (bulletPoints.length > 0) {
-                        bulletPoints.push({ text: '\n' }); // Add space between bullets
-                    }
-                    bulletPoints.push(...parsedText);
-                }
+                
+                currentBulletBlock.push({
+                    text: contentText,
+                    options: { bullet: { type: bulletType, indent: 18 * (indent/2) } }
+                });
             }
-        });
-        
-        processTable(); // Process any remaining table
-        
-        if (bulletPoints.length > 0) {
-            pptxSlide.addText(bulletPoints, { x: 0.5, y: yPos, w: '90%', h: 'auto', bullet: true, fontSize: 18, paraSpaceAfter: 8 });
         }
+        
+        flushBulletBlock();
+        flushTableBlock();
     }
 
     pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
