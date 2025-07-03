@@ -43,12 +43,12 @@ const prompt = ai.definePrompt({
 
   Patient Data: {{{patientData}}}
 
-  {% if supportingDocuments %}
+  {{#if supportingDocuments}}
   Supporting Documents:
-  {% each supportingDocuments %}
+  {{#each supportingDocuments}}
   {{media url=this}}
-  {% endeach %}
-  {% endif %}
+  {{/each}}
+  {{/if}}
 
   Return the diagnoses as a JSON array of Diagnosis objects.  Each Diagnosis object should have fields for diagnosis, confidenceLevel, reasoning, and missingInformation.
 `,
