@@ -31,6 +31,7 @@ import {
   Loader2,
   Wand2,
   Scaling,
+  ClipboardCopy,
 } from 'lucide-react';
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
@@ -159,6 +160,32 @@ export function SlideEditor({
       setIsModifying(false);
     }
   };
+  
+  const handleCopyRawContent = () => {
+    const rawContent = slides
+      .map(
+        (slide) => `Title: ${slide.title}\n\nContent:\n${slide.content}`
+      )
+      .join('\n\n--------------------------\n\n');
+
+    navigator.clipboard.writeText(rawContent).then(
+      () => {
+        toast({
+          title: 'Content Copied',
+          description:
+            'The raw slide content has been copied to your clipboard.',
+        });
+      },
+      (err) => {
+        console.error('Could not copy text: ', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to copy content to clipboard.',
+          variant: 'destructive',
+        });
+      }
+    );
+  };
 
   const handleExport = () => {
     const pptx = new PptxGenJS();
@@ -191,7 +218,7 @@ export function SlideEditor({
 
             if (isTable) {
                 let tableBlockLines: string[] = [];
-                while (lineIdx < lines.length && lines[lineIdx].trim().startsWith('|')) {
+                while (lineIdx < lines.length && lines[lineIdx]?.trim().startsWith('|')) {
                     tableBlockLines.push(lines[lineIdx]);
                     lineIdx++;
                 }
@@ -214,7 +241,7 @@ export function SlideEditor({
 
             } else {
                 let textBlockLines: string[] = [];
-                while (lineIdx < lines.length && !lines[lineIdx].trim().startsWith('|')) {
+                while (lineIdx < lines.length && !lines[lineIdx]?.trim().startsWith('|')) {
                     textBlockLines.push(lines[lineIdx]);
                     lineIdx++;
                 }
@@ -255,12 +282,16 @@ export function SlideEditor({
                         x: 0.5, y: yPos, w: 9.0, h: tempY - yPos,
                         fontSize: 18, fontFace: 'Arial', color: '363636', lineSpacing: 28,
                     });
-                    yPos = tempY + BLOCK_SPACING_INCH;
+                    yPos = tempY; // Removed BLOCK_SPACING_INCH to allow tighter packing
                 }
-
+                
                 const remainingInBlock = textBlockLines.length - linesThatFit.length;
                 if (remainingInBlock > 0) {
-                    return lines.slice(currentBlockStartIndex + linesThatFit.length);
+                    const remainingLines = lines.slice(currentBlockStartIndex + linesThatFit.length);
+                    // If we have remaining lines and we've added something to the slide already, it means we need to continue.
+                    if (linesThatFit.length > 0) {
+                        return remainingLines;
+                    }
                 }
             }
         }
@@ -285,12 +316,18 @@ export function SlideEditor({
         
         const remainingLines = renderContentOnSlide(slide, linesToProcess);
         
-        if (remainingLines.length > 0) {
-          slide.addText('(Continued...)', { x: '85%', y: '92%', w: '15%', h: '8%', fontSize: 12, italic: true, color: '999999', align: 'right' });
+        if (remainingLines.length > 0 && linesToProcess.length !== remainingLines.length) {
+            slide.addText('(Continued...)', { x: '85%', y: '92%', w: '15%', h: '8%', fontSize: 12, italic: true, color: '999999', align: 'right' });
         }
         
         linesToProcess = remainingLines;
         isFirstPhysicalSlide = false;
+
+        // Break loop if no progress is made to prevent infinite loops
+        if (linesToProcess.length > 0 && linesToProcess === remainingLines) {
+            console.error("Infinite loop detected in PPTX generation. Aborting for this slide.");
+            break;
+        }
       }
     });
 
@@ -350,6 +387,14 @@ export function SlideEditor({
               >
                 <Plus />
                 Add Slide
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCopyRawContent}
+                disabled={isModifying || slides.length === 0}
+              >
+                <ClipboardCopy />
+                Copy Raw Content
               </Button>
               <Button
                 onClick={handleExport}
