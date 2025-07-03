@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { generateSlideOutline } from '@/ai/flows/generate-slide-outline';
+import { generateSlideOutline, type GenerateSlideOutlineOutput } from '@/ai/flows/generate-slide-outline';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,15 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Wand2 } from 'lucide-react';
 import { SlideEditor } from '@/components/SlideEditor';
 
+export interface Slide {
+  title: string;
+  content: string;
+}
+
 export default function ContentGeneratorPage() {
   const [topic, setTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [outline, setOutline] =useState<string | null>(null);
+  const [slides, setSlides] = useState<Slide[] | null>(null);
   const { toast } = useToast();
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -28,11 +33,11 @@ export default function ContentGeneratorPage() {
     }
 
     setIsLoading(true);
-    setOutline(null);
+    setSlides(null);
 
     try {
       const result = await generateSlideOutline({ topic });
-      setOutline(result.outline);
+      setSlides(result);
     } catch (error) {
       console.error('Outline generation failed:', error);
       toast({
@@ -48,10 +53,10 @@ export default function ContentGeneratorPage() {
   const handleRefresh = async (currentTopic: string) => {
     setTopic(currentTopic);
     setIsLoading(true);
-    setOutline(null);
+    setSlides(null);
     try {
       const result = await generateSlideOutline({ topic: currentTopic });
-      setOutline(result.outline);
+      setSlides(result);
     } catch (error) {
        console.error('Outline generation failed:', error);
       toast({
@@ -109,12 +114,13 @@ export default function ContentGeneratorPage() {
           </Card>
         )}
 
-        {outline && (
+        {slides && (
           <SlideEditor 
-            key={outline}
-            outline={outline} 
+            key={topic}
+            initialSlides={slides} 
             topic={topic}
             onRefresh={handleRefresh}
+            onSlidesUpdate={setSlides}
           />
         )}
       </div>

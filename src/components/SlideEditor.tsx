@@ -1,129 +1,277 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
-import { Trash2, Plus, RefreshCw, FileDown } from 'lucide-react';
-
-interface Slide {
-  id: number;
-  title: string;
-  content: string;
-}
+import { Checkbox } from './ui/checkbox';
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Trash2, Plus, RefreshCw, FileDown, Loader2, Wand2, Scaling } from 'lucide-react';
+import pptxgen from 'pptxgenjs';
+import { modifySlides } from '@/ai/flows/modify-slides';
+import type { Slide } from '@/app/content-generator/page';
+import { useToast } from '@/hooks/use-toast';
+import { Label } from './ui/label';
 
 interface SlideEditorProps {
-  outline: string;
+  initialSlides: Slide[];
   topic: string;
   onRefresh: (topic: string) => void;
+  onSlidesUpdate: (slides: Slide[]) => void;
 }
 
-export function SlideEditor({ outline, topic: initialTopic, onRefresh }: SlideEditorProps) {
-  const [slides, setSlides] = useState<Slide[]>([]);
+export function SlideEditor({ initialSlides, topic: initialTopic, onRefresh, onSlidesUpdate }: SlideEditorProps) {
+  const [slides, setSlides] = useState<Slide[]>(initialSlides);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [topic, setTopic] = useState(initialTopic);
+  const [isModifying, setIsModifying] = useState(false);
+  const [isRefreshModalOpen, setIsRefreshModalOpen] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const parsedSlides: Slide[] = [];
-    const sections = outline.split(/\n(?=##\s)/);
+    setSlides(initialSlides);
+    setSelectedIndices([]);
+  }, [initialSlides]);
 
-    sections.forEach((section, index) => {
-      const lines = section.split('\n');
-      const titleLine = lines.find(line => line.startsWith('## '));
-      const title = titleLine ? titleLine.replace('## ', '').trim() : `Slide ${index + 1}`;
-      const content = lines.filter(line => !line.startsWith('## ')).join('\n').trim();
-      
-      parsedSlides.push({
-        id: Date.now() + index,
-        title,
-        content,
-      });
-    });
-
-    setSlides(parsedSlides);
-  }, [outline]);
-
-  const handleContentChange = (id: number, newContent: string) => {
-    setSlides(
-      slides.map((slide) =>
-        slide.id === id ? { ...slide, content: newContent } : slide
-      )
+  const handleSelectionChange = (index: number) => {
+    setSelectedIndices(prev =>
+      prev.includes(index)
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
     );
   };
-  
-  const handleTitleChange = (id: number, newTitle: string) => {
-     setSlides(
-      slides.map((slide) =>
-        slide.id === id ? { ...slide, title: newTitle } : slide
-      )
+
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      setSelectedIndices(slides.map((_, i) => i));
+    } else {
+      setSelectedIndices([]);
+    }
+  }
+
+  const handleContentChange = (index: number, newContent: string) => {
+    const newSlides = slides.map((slide, i) =>
+      i === index ? { ...slide, content: newContent } : slide
     );
+    setSlides(newSlides);
+  };
+  
+  const handleTitleChange = (index: number, newTitle: string) => {
+    const newSlides = slides.map((slide, i) =>
+      i === index ? { ...slide, title: newTitle } : slide
+    );
+    setSlides(newSlides);
+  }
+
+  const handleBlur = () => {
+    onSlidesUpdate(slides);
   }
 
   const addSlide = () => {
-    const newSlide: Slide = {
-      id: Date.now(),
-      title: 'New Slide',
-      content: '',
-    };
-    setSlides([...slides, newSlide]);
+    const newSlide: Slide = { title: 'New Slide', content: '' };
+    const newSlides = [...slides, newSlide];
+    setSlides(newSlides);
+    onSlidesUpdate(newSlides);
   };
 
-  const removeSlide = (id: number) => {
-    setSlides(slides.filter((slide) => slide.id !== id));
+  const removeSlide = (index: number) => {
+    const newSlides = slides.filter((_, i) => i !== index);
+    setSlides(newSlides);
+    onSlidesUpdate(newSlides);
+    setSelectedIndices(prev => prev.filter(i => i !== index).map(i => i > index ? i - 1 : i));
   };
+
+  const deleteSelectedSlides = () => {
+    const newSlides = slides.filter((_, index) => !selectedIndices.includes(index));
+    const deletedCount = selectedIndices.length;
+    setSlides(newSlides);
+    onSlidesUpdate(newSlides);
+    setSelectedIndices([]);
+    toast({ title: "Slides Deleted", description: `${deletedCount} slides have been removed.` });
+  }
   
   const handleRefreshClick = () => {
     onRefresh(topic);
   }
 
+  const handleModifySlides = async (action: 'expand_content' | 'replace_content' | 'expand_selected') => {
+    setIsModifying(true);
+    setIsRefreshModalOpen(false);
+    try {
+      const result = await modifySlides({ slides, selectedIndices, action });
+      setSlides(result);
+      onSlidesUpdate(result);
+      setSelectedIndices([]);
+      toast({ title: "Slides Updated", description: "The selected slides have been modified." });
+    } catch(error) {
+      console.error(`Slide modification failed for action: ${action}`, error);
+      toast({
+        title: 'An Error Occurred',
+        description: 'Failed to modify slides. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsModifying(false);
+    }
+  }
+
+  const handleExport = () => {
+    const pptx = new pptxgen();
+    pptx.layout = 'LAYOUT_WIDE';
+    
+    slides.forEach(slide => {
+        const pptxSlide = pptx.addSlide();
+        
+        pptxSlide.addText(slide.title, { 
+            x: 0.5, y: 0.25, w: '90%', h: 1, 
+            fontSize: 24, bold: true, color: '3B5998', align: 'left'
+        });
+        
+        const contentPoints = slide.content
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.startsWith('- '))
+          .map(line => line.substring(2).trim());
+
+        if (contentPoints.length > 0) {
+            pptxSlide.addText(contentPoints.join('\n'), { 
+                x: 0.5, 
+                y: 1.5, 
+                w: '90%', 
+                h: '75%', 
+                bullet: true, 
+                fontSize: 18,
+            });
+        }
+    });
+
+    pptx.writeFile({ fileName: `${topic.replace(/\s+/g, '_') || 'presentation'}.pptx` });
+  };
+
+  const allSelected = selectedIndices.length > 0 && selectedIndices.length === slides.length;
+  const someSelected = selectedIndices.length > 0 && selectedIndices.length < slides.length;
+  const checkboxState = allSelected ? true : someSelected ? 'indeterminate' : false;
+
   return (
+    <div className="relative">
     <Card className="shadow-lg">
+        { isModifying &&
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-20 rounded-lg">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Modifying your slides...</span>
+                </div>
+            </div>
+        }
       <CardHeader>
         <CardTitle>Presentation Editor</CardTitle>
-        <div className="flex flex-wrap items-end gap-2 pt-4">
-            <div className="flex-grow">
-                <label htmlFor="topic-refresh" className="text-sm font-medium text-muted-foreground">Presentation Topic</label>
+        <CardDescription>Review, edit, and modify your slides before exporting.</CardDescription>
+        <div className="flex flex-wrap items-center gap-2 pt-4">
+            <div className="flex-grow space-y-1">
+                <Label htmlFor="topic-refresh" className="text-xs font-medium text-muted-foreground">Presentation Topic</Label>
                  <Input 
                     id="topic-refresh"
                     value={topic}
                     onChange={(e) => setTopic(e.target.value)}
-                    className="mt-1"
                 />
             </div>
-            <Button variant="outline" onClick={handleRefreshClick}><RefreshCw className="mr-2 h-4 w-4"/>Refresh</Button>
-            <Button variant="outline" onClick={addSlide}><Plus className="mr-2 h-4 w-4"/>Add Slide</Button>
-            <Button disabled><FileDown className="mr-2 h-4 w-4" />Export PPT</Button>
-            <Button disabled><FileDown className="mr-2 h-4 w-4" />Export Word</Button>
+            <div className="flex items-end gap-2">
+              <Button variant="outline" onClick={handleRefreshClick} disabled={isModifying}><RefreshCw />Refresh Topic</Button>
+              <Button variant="outline" onClick={addSlide} disabled={isModifying}><Plus />Add Slide</Button>
+              <Button onClick={handleExport} disabled={isModifying || slides.length === 0}><FileDown />Generate PowerPoint</Button>
+            </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {slides.map((slide, index) => (
-          <Card key={slide.id} className="bg-background">
-            <CardHeader className="flex flex-row items-center justify-between p-4">
-              <Input 
-                value={slide.title}
-                onChange={(e) => handleTitleChange(slide.id, e.target.value)}
-                className="text-lg font-semibold border-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring p-0"
+        <div className="flex items-center gap-2 border-b pb-2">
+            <Checkbox 
+              id="select-all" 
+              onCheckedChange={handleSelectAll} 
+              checked={checkboxState}
+              aria-label="Select all slides"
               />
+            <Label htmlFor='select-all' className="text-sm font-medium">
+                {selectedIndices.length > 0 ? `${selectedIndices.length} of ${slides.length} selected` : 'Select slides'}
+            </Label>
+        </div>
+
+        {slides.map((slide, index) => (
+          <Card key={index} className="bg-background/50 relative overflow-hidden transition-all duration-300 data-[selected=true]:bg-accent/20 data-[selected=true]:ring-2 data-[selected=true]:ring-accent" data-selected={selectedIndices.includes(index)}>
+            <CardHeader className="flex flex-row items-center justify-between p-4">
+               <div className="flex items-center gap-3">
+                 <Checkbox
+                    id={`select-${index}`}
+                    checked={selectedIndices.includes(index)}
+                    onCheckedChange={() => handleSelectionChange(index)}
+                    aria-label={`Select slide ${index + 1}`}
+                />
+                <Input 
+                  value={slide.title}
+                  onChange={(e) => handleTitleChange(index, e.target.value)}
+                  onBlur={handleBlur}
+                  className="text-lg font-semibold border-0 shadow-none focus-visible:ring-1 focus-visible:ring-ring p-0 h-auto"
+                />
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => removeSlide(slide.id)}
+                onClick={() => removeSlide(index)}
                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </CardHeader>
-            <CardContent className="p-4 pt-0">
+            <CardContent className="p-4 pt-0 pl-12">
               <Textarea
                 value={slide.content}
-                onChange={(e) => handleContentChange(slide.id, e.target.value)}
+                onChange={(e) => handleContentChange(index, e.target.value)}
+                onBlur={handleBlur}
                 className="min-h-[120px] w-full"
+                placeholder="Use markdown for bullet points (e.g., - point 1)"
               />
             </CardContent>
           </Card>
         ))}
       </CardContent>
     </Card>
+      
+      {selectedIndices.length > 0 && (
+          <div className="sticky bottom-4 mx-auto w-fit z-10 bg-card/95 backdrop-blur-sm border p-2 flex justify-center gap-2 shadow-lg rounded-lg">
+             <AlertDialog open={isRefreshModalOpen} onOpenChange={setIsRefreshModalOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="outline" disabled={isModifying}><Wand2 /> Refresh Selected</Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Refresh Content</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Choose how to regenerate content for the selected slides.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <Button variant="outline" className="justify-start text-left h-auto" onClick={() => handleModifySlides('expand_content')}>
+                           <div className="flex flex-col">
+                                <span className="font-semibold">Expand Content</span>
+                                <span className="text-sm text-muted-foreground">Generate more detailed content, possibly adding more slides.</span>
+                           </div>
+                        </Button>
+                         <Button variant="outline" className="justify-start text-left h-auto" onClick={() => handleModifySlides('replace_content')}>
+                           <div className="flex flex-col">
+                                <span className="font-semibold">Replace Content</span>
+                                <span className="text-muted-foreground">Generate alternative content for the same topics.</span>
+                           </div>
+                        </Button>
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <Button variant="outline" disabled={isModifying} onClick={() => handleModifySlides('expand_selected')}><Scaling /> Expand Selected</Button>
+            <Button variant="destructive" disabled={isModifying} onClick={deleteSelectedSlides}><Trash2 /> Delete Selected</Button>
+          </div>
+      )}
+    </div>
   );
 }
