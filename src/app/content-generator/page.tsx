@@ -152,6 +152,10 @@ export default function ContentGeneratorPage() {
   const isQuestionSubmitDisabled = !question.trim() && !imageFile;
   const isTopicSubmitDisabled = !topic.trim();
 
+  const formatText = (text: string) => {
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
+  };
+
   if (slides && result) {
     return (
        <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -261,7 +265,7 @@ export default function ContentGeneratorPage() {
               <CardDescription>Topic: {result.topic}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-               <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: result.answer.replace(/\n/g, '<br />')}}></div>
+               <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(result.answer)}}></div>
 
                 {result.reasoning && (
                      <div className="rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
@@ -269,7 +273,7 @@ export default function ContentGeneratorPage() {
                             <Lightbulb className="h-4 w-4" />
                             Reasoning
                         </h4>
-                        <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: result.reasoning.replace(/\n/g, '<br />')}}></div>
+                        <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(result.reasoning)}}></div>
                     </div>
                 )}
                 
