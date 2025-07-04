@@ -572,14 +572,6 @@ export function SlideEditor({
               />
             </div>
             <div className="flex items-end gap-2">
-               <Button
-                variant="outline"
-                onClick={onNewCase}
-                disabled={isModifying}
-              >
-                <PlusCircle />
-                New Case
-              </Button>
               <Button
                 variant="outline"
                 onClick={handleRefreshClick}

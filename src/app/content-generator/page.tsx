@@ -287,6 +287,7 @@ export default function ContentGeneratorPage() {
   const isTopicSubmitDisabled = !topic.trim();
 
   const formatText = (text: string) => {
+    if (!text) return '';
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
   };
   
@@ -298,101 +299,81 @@ export default function ContentGeneratorPage() {
     );
   }
 
-  if (slides && result) {
-    return (
-       <div className="container mx-auto max-w-4xl px-4 py-8">
-            <SlideEditor
-                key={result.topic}
-                initialSlides={slides}
-                topic={result.topic}
-                caseId={currentCaseId}
-                onRefresh={handleGeneratePresentation}
-                onSlidesUpdate={(updatedSlides) => {
-                    setSlides(updatedSlides);
-                    if (currentCaseId) {
-                        const caseRef = doc(db, 'cases', currentCaseId);
-                        updateDoc(caseRef, { 'outputData.slides': updatedSlides });
-                    }
-                }}
-                onNewCase={handleNewCase}
-            />
-       </div>
-    );
-  }
-
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="space-y-8">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Content Generator</CardTitle>
-            <CardDescription>
-              Select a mode to either analyze a clinical question or generate content for a medical topic.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={mode} onValueChange={(value) => setMode(value as any)} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="question">Specific Clinical Question</TabsTrigger>
-                <TabsTrigger value="topic">General Medical Topic</TabsTrigger>
-              </TabsList>
-              <TabsContent value="question" className="pt-4">
-                <form onSubmit={handleQuestionSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="question">Clinical Question (optional if image is provided)</Label>
-                    <Textarea
-                      id="question"
-                      placeholder="e.g., 'What are the treatment options for this condition?' You can also paste an image from your clipboard here."
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      onPaste={handlePaste}
-                      disabled={isLoading}
-                      className="min-h-[100px]"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                     <Label htmlFor="image">Supporting Image (optional)</Label>
-                     <Input
-                        id="image"
-                        type="file"
-                        accept=".jpg,.jpeg,.png"
-                        onChange={handleFileChange}
-                        onPaste={handlePaste}
-                        disabled={isLoading}
-                      />
-                      {imagePreview && (
-                        <div className="mt-2">
-                            <img src={imagePreview} alt="Selected preview" className="max-h-48 rounded-md border" />
+        {!result && !isLoading && (
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle>Content Generator</CardTitle>
+                    <CardDescription>
+                    Select a mode to either analyze a clinical question or generate content for a medical topic.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Tabs value={mode} onValueChange={(value) => setMode(value as any)} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="question">Specific Clinical Question</TabsTrigger>
+                        <TabsTrigger value="topic">General Medical Topic</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="question" className="pt-4">
+                        <form onSubmit={handleQuestionSubmit} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="question">Clinical Question (optional if image is provided)</Label>
+                            <Textarea
+                            id="question"
+                            placeholder="e.g., 'What are the treatment options for this condition?' You can also paste an image from your clipboard here."
+                            value={question}
+                            onChange={(e) => setQuestion(e.target.value)}
+                            onPaste={handlePaste}
+                            disabled={isLoading}
+                            className="min-h-[100px]"
+                            />
                         </div>
-                      )}
-                  </div>
-                  <Button type="submit" className="w-full sm:w-auto" disabled={isLoading || isQuestionSubmitDisabled}>
-                    {isLoading ? <Loader2 className="animate-spin" /> : <Bot />}
-                    Get Answer
-                  </Button>
-                </form>
-              </TabsContent>
-              <TabsContent value="topic" className="pt-4">
-                <form onSubmit={handleTopicSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="topic">Medical Topic</Label>
-                    <Input
-                      id="topic"
-                      placeholder="e.g., 'Pathophysiology of Myocardial Infarction'"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                   <Button type="submit" className="w-full sm:w-auto" disabled={isLoading || isTopicSubmitDisabled}>
-                    {isLoading ? <Loader2 className="animate-spin" /> : <FileText />}
-                    Set Topic
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+                        <div className="space-y-2">
+                            <Label htmlFor="image">Supporting Image (optional)</Label>
+                            <Input
+                                id="image"
+                                type="file"
+                                accept=".jpg,.jpeg,.png"
+                                onChange={handleFileChange}
+                                onPaste={handlePaste}
+                                disabled={isLoading}
+                            />
+                            {imagePreview && (
+                                <div className="mt-2">
+                                    <img src={imagePreview} alt="Selected preview" className="max-h-48 rounded-md border" />
+                                </div>
+                            )}
+                        </div>
+                        <Button type="submit" className="w-full sm:w-auto" disabled={isLoading || isQuestionSubmitDisabled}>
+                            {isLoading ? <Loader2 className="animate-spin" /> : <Bot />}
+                            Get Answer
+                        </Button>
+                        </form>
+                    </TabsContent>
+                    <TabsContent value="topic" className="pt-4">
+                        <form onSubmit={handleTopicSubmit} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="topic">Medical Topic</Label>
+                            <Input
+                            id="topic"
+                            placeholder="e.g., 'Pathophysiology of Myocardial Infarction'"
+                            value={topic}
+                            onChange={(e) => setTopic(e.target.value)}
+                            disabled={isLoading}
+                            />
+                        </div>
+                        <Button type="submit" className="w-full sm:w-auto" disabled={isLoading || isTopicSubmitDisabled}>
+                            {isLoading ? <Loader2 className="animate-spin" /> : <FileText />}
+                            Set Topic
+                        </Button>
+                        </form>
+                    </TabsContent>
+                    </Tabs>
+                </CardContent>
+            </Card>
+        )}
 
         {(isLoading && !result) && (
           <Card>
@@ -405,12 +386,18 @@ export default function ContentGeneratorPage() {
           </Card>
         )}
 
-        {result && !slides && (
+        {result && (
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BrainCircuit className="text-primary"/>
-                AI Response
+              <CardTitle className="flex items-center justify-between">
+                 <span className="flex items-center gap-2">
+                    <BrainCircuit className="text-primary"/>
+                    AI Response
+                 </span>
+                 <Button variant="outline" onClick={handleNewCase} disabled={isLoading}>
+                      <PlusCircle />
+                      New Case
+                  </Button>
               </CardTitle>
               <CardDescription>Topic: {result.topic}</CardDescription>
             </CardHeader>
@@ -427,18 +414,32 @@ export default function ContentGeneratorPage() {
                     </div>
                 )}
                 
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={handleGeneratePresentation} disabled={isLoading}>
-                      {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
-                      Generate Presentation
-                  </Button>
-                   <Button variant="outline" onClick={handleNewCase}>
-                      <PlusCircle />
-                      New Case
-                  </Button>
-                </div>
+                {!slides && (
+                    <Button onClick={handleGeneratePresentation} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
+                        Generate Presentation
+                    </Button>
+                )}
             </CardContent>
           </Card>
+        )}
+
+        {slides && result && (
+            <SlideEditor
+                key={result.topic}
+                initialSlides={slides}
+                topic={result.topic}
+                caseId={currentCaseId}
+                onRefresh={handleGeneratePresentation}
+                onSlidesUpdate={(updatedSlides) => {
+                    setSlides(updatedSlides);
+                    if (currentCaseId) {
+                        const caseRef = doc(db, 'cases', currentCaseId);
+                        updateDoc(caseRef, { 'outputData.slides': updatedSlides });
+                    }
+                }}
+                onNewCase={handleNewCase}
+            />
         )}
       </div>
     </div>
