@@ -3,6 +3,11 @@ import type { AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
 import type { AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
 import type { Slide } from '@/components/SlideEditor';
 
+export interface StructuredQuestion {
+    summary: string;
+    images: string[];
+}
+
 interface BaseCase {
     id: string;
     userId: string;
@@ -15,6 +20,7 @@ export interface DiagnosisCase extends BaseCase {
     inputData: {
         patientData?: string;
         supportingDocuments?: string[];
+        structuredQuestion?: StructuredQuestion;
     };
     outputData: AiDiagnosisOutput;
 }
@@ -24,8 +30,9 @@ export interface ContentCase extends BaseCase {
     inputData: {
         mode: 'question' | 'topic';
         question?: string;
-        image?: string;
+        images?: string[];
         topic?: string;
+        structuredQuestion?: StructuredQuestion;
     };
     outputData: {
         result: AnswerClinicalQuestionOutput;

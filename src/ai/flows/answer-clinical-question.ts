@@ -13,9 +13,9 @@ import {z} from 'genkit';
 
 const AnswerClinicalQuestionInputSchema = z.object({
   question: z.string().optional().describe('The clinical question being asked by the user.'),
-  image: z.string().optional().describe("An image related to the clinical question, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."),
+  images: z.array(z.string()).optional().describe("A list of images related to the clinical question, as data URIs that must include a MIME type and use Base64 encoding."),
 }).superRefine((data, ctx) => {
-    if (!data.question && !data.image) {
+    if (!data.question && (!data.images || data.images.length === 0)) {
         ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: "Either a question or an image must be provided.",
@@ -40,14 +40,17 @@ const prompt = ai.definePrompt({
   name: 'answerClinicalQuestionPrompt',
   input: {schema: AnswerClinicalQuestionInputSchema},
   output: {schema: AnswerClinicalQuestionOutputSchema},
-  prompt: `You are a world-class medical expert AI. Your task is to analyze a clinical question and/or a medical image and provide a comprehensive answer, your reasoning, and a topic for a presentation.
+  prompt: `You are a world-class medical expert AI. Your task is to analyze a clinical question and/or medical images and provide a comprehensive answer, your reasoning, and a topic for a presentation.
 
   Analyze the following information:
   {{#if question}}
   Question: {{{question}}}
   {{/if}}
-  {{#if image}}
-  Image: {{media url=image}}
+  {{#if images}}
+  Images:
+  {{#each images}}
+  {{media url=this}}
+  {{/each}}
   {{/if}}
 
   Based on your analysis, provide the following in JSON format:

@@ -4,6 +4,7 @@ import { useState, type ChangeEvent, type ClipboardEvent, useEffect } from 'reac
 import { useRouter, useSearchParams } from 'next/navigation';
 import { generateSlideOutline } from '@/ai/flows/generate-slide-outline';
 import { answerClinicalQuestion, type AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
+import { summarizeQuestion } from '@/ai/flows/summarize-question';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,19 +18,22 @@ import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
+import type { StructuredQuestion } from '@/types';
+import { QuestionDisplay } from '@/components/QuestionDisplay';
 
 
 export default function ContentGeneratorPage() {
   const [mode, setMode] = useState<'question' | 'topic'>('question');
   
   const [question, setQuestion] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   
   const [topic, setTopic] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnswerClinicalQuestionOutput | null>(null);
+  const [structuredQuestion, setStructuredQuestion] = useState<StructuredQuestion | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
 
@@ -56,10 +60,10 @@ export default function ContentGeneratorPage() {
             const caseData = caseSnap.data();
             setMode(caseData.inputData.mode);
             setQuestion(caseData.inputData.question || '');
-            // We can't restore the File object, but we can show the preview
-            setImageFile(null);
-            setImagePreview(caseData.inputData.image || null);
+            setImageFiles([]);
+            setImagePreviews(caseData.inputData.images || []);
             setTopic(caseData.inputData.topic || '');
+            setStructuredQuestion(caseData.inputData.structuredQuestion || null);
             setResult(caseData.outputData.result);
             setSlides(caseData.outputData.slides);
             setCurrentCaseId(caseId);
@@ -81,17 +85,12 @@ export default function ContentGeneratorPage() {
   }, [searchParams, user, router, toast, currentCaseId]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setImageFile(null);
-      setImagePreview(null);
+    const files = event.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      setImageFiles(prev => [...prev, ...newFiles]);
+      const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+      setImagePreviews(prev => [...prev, ...newPreviews]);
     }
   };
 
@@ -101,12 +100,8 @@ export default function ContentGeneratorPage() {
         if (items[i].type.indexOf('image') !== -1) {
             const file = items[i].getAsFile();
             if (file) {
-                setImageFile(file);
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setImagePreview(reader.result as string);
-                };
-                reader.readAsDataURL(file);
+                setImageFiles(prev => [...prev, file]);
+                setImagePreviews(prev => [...prev, URL.createObjectURL(file)]);
                 toast({
                     title: "Image Pasted",
                     description: `Pasted image from clipboard.`,
@@ -135,14 +130,25 @@ export default function ContentGeneratorPage() {
     setIsLoading(true);
     setResult(null);
     setSlides(null);
+    setStructuredQuestion(null);
 
     try {
-      const image = imageFile ? await fileToDataUri(imageFile) : undefined;
-      const response = await answerClinicalQuestion({
-        question: question.trim() || undefined,
-        image,
-      });
+      const images = await Promise.all(imageFiles.map(fileToDataUri));
+      
+      const [response, summaryResponse] = await Promise.all([
+        answerClinicalQuestion({
+          question: question.trim() || undefined,
+          images: images.length > 0 ? images : undefined,
+        }),
+        summarizeQuestion({
+          question: question.trim() || undefined,
+          images: images.length > 0 ? images : undefined,
+        })
+      ]);
+
       setResult(response);
+      const newStructuredQuestion = { summary: summaryResponse.summary, images: images };
+      setStructuredQuestion(newStructuredQuestion);
 
       const caseData = {
           userId: user.uid,
@@ -152,8 +158,9 @@ export default function ContentGeneratorPage() {
           inputData: {
               mode: 'question' as const,
               question: question.trim() || null,
-              image: image || null,
+              images: images.length > 0 ? images : null,
               topic: null,
+              structuredQuestion: newStructuredQuestion,
           },
           outputData: {
               result: response,
@@ -192,6 +199,7 @@ export default function ContentGeneratorPage() {
     setIsLoading(true);
     setResult(null);
     setSlides(null);
+    setStructuredQuestion(null);
 
     try {
       const summaryResult = {
@@ -209,8 +217,9 @@ export default function ContentGeneratorPage() {
           inputData: {
               mode: 'topic' as const,
               question: null,
-              image: null,
+              images: null,
               topic: topic.trim() || null,
+              structuredQuestion: null,
           },
           outputData: {
               result: summaryResult,
@@ -274,16 +283,17 @@ export default function ContentGeneratorPage() {
   const handleNewCase = () => {
     setMode('question');
     setQuestion('');
-    setImageFile(null);
-    setImagePreview(null);
+    setImageFiles([]);
+    setImagePreviews([]);
     setTopic('');
     setResult(null);
     setSlides(null);
     setCurrentCaseId(null);
+    setStructuredQuestion(null);
     router.push('/content-generator');
   };
   
-  const isQuestionSubmitDisabled = !question.trim() && !imageFile;
+  const isQuestionSubmitDisabled = !question.trim() && imageFiles.length === 0;
   const isTopicSubmitDisabled = !topic.trim();
 
   const formatText = (text: string) => {
@@ -331,7 +341,7 @@ export default function ContentGeneratorPage() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="image">Supporting Image (optional)</Label>
+                            <Label htmlFor="image">Supporting Image(s) (optional)</Label>
                             <Input
                                 id="image"
                                 type="file"
@@ -339,11 +349,19 @@ export default function ContentGeneratorPage() {
                                 onChange={handleFileChange}
                                 onPaste={handlePaste}
                                 disabled={isLoading}
+                                multiple
                             />
-                            {imagePreview && (
-                                <div className="mt-2">
-                                    <img src={imagePreview} alt="Selected preview" className="max-h-48 rounded-md border" />
-                                </div>
+                             {imagePreviews.length > 0 && (
+                               <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                                {imagePreviews.map((preview, i) => (
+                                  <div
+                                    key={i}
+                                    className="relative aspect-square"
+                                  >
+                                     <img src={preview} alt={`preview ${i}`} className="h-full w-full object-cover rounded-md border" />
+                                  </div>
+                                ))}
+                              </div>
                             )}
                         </div>
                         <Button type="submit" className="w-full sm:w-auto" disabled={isLoading || isQuestionSubmitDisabled}>
@@ -384,6 +402,10 @@ export default function ContentGeneratorPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+        
+        {structuredQuestion && (
+            <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
         )}
 
         {result && (

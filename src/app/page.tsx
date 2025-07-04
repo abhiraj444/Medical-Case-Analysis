@@ -3,6 +3,7 @@
 import { useState, type ChangeEvent, type ClipboardEvent, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiDiagnosis, type AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
+import { summarizeQuestion } from '@/ai/flows/summarize-question';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,8 @@ import { Bot, FileText, Loader2, Upload, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
+import type { StructuredQuestion } from '@/types';
+import { QuestionDisplay } from '@/components/QuestionDisplay';
 
 export default function DiagnosisPage() {
   const [patientData, setPatientData] = useState('');
@@ -22,6 +25,7 @@ export default function DiagnosisPage() {
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<AiDiagnosisOutput | null>(null);
+  const [structuredQuestion, setStructuredQuestion] = useState<StructuredQuestion | null>(null);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
   
   const { toast } = useToast();
@@ -48,6 +52,7 @@ export default function DiagnosisPage() {
             setPatientData(caseData.inputData.patientData || '');
             setFilePreviews(caseData.inputData.supportingDocuments || []);
             setFiles([]); // Can't restore File objects, but previews are shown
+            setStructuredQuestion(caseData.inputData.structuredQuestion || null);
             setResults(caseData.outputData);
             setCurrentCaseId(caseId);
             toast({ title: "Case Loaded", description: `Successfully loaded case: ${caseData.title}` });
@@ -120,14 +125,25 @@ export default function DiagnosisPage() {
 
     setIsLoading(true);
     setResults(null);
+    setStructuredQuestion(null);
 
     try {
       const supportingDocuments = await Promise.all(files.map(fileToDataUri));
-      const diagnosisResults = await aiDiagnosis({
-        patientData: patientData.trim() ? patientData : undefined,
-        supportingDocuments: supportingDocuments.length > 0 ? supportingDocuments : undefined,
-      });
+      
+      const [diagnosisResults, summaryResponse] = await Promise.all([
+        aiDiagnosis({
+          patientData: patientData.trim() ? patientData : undefined,
+          supportingDocuments: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+        }),
+        summarizeQuestion({
+          question: patientData.trim() ? patientData : undefined,
+          images: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+        })
+      ]);
+      
       setResults(diagnosisResults);
+      const newStructuredQuestion = { summary: summaryResponse.summary, images: supportingDocuments };
+      setStructuredQuestion(newStructuredQuestion);
       
       const title = diagnosisResults[0]?.diagnosis || 'New Diagnosis Case';
       const caseData = {
@@ -138,6 +154,7 @@ export default function DiagnosisPage() {
         inputData: {
           patientData: patientData.trim() || null,
           supportingDocuments: supportingDocuments,
+          structuredQuestion: newStructuredQuestion,
         },
         outputData: diagnosisResults,
       };
@@ -171,6 +188,7 @@ export default function DiagnosisPage() {
     setFilePreviews([]);
     setResults(null);
     setCurrentCaseId(null);
+    setStructuredQuestion(null);
     router.push('/');
   };
 
@@ -253,6 +271,10 @@ export default function DiagnosisPage() {
         </Card>
 
         <div className="space-y-6">
+          {structuredQuestion && (
+            <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
+          )}
+
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -320,7 +342,7 @@ export default function DiagnosisPage() {
             </div>
           )}
           
-          {!isLoading && !results && (
+          {!isLoading && !results && !structuredQuestion && (
              <Card>
                 <CardContent className="p-6">
                   <p className="text-center text-muted-foreground">
