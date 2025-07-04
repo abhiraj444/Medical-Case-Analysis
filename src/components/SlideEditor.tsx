@@ -275,51 +275,42 @@ export function SlideEditor({
     setIsModifying(true);
     try {
         const doc = new jsPDF({ unit: 'pt', format: 'letter' });
-        doc.deletePage(1); // Start with a fresh slate, no initial blank page.
-
+        
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
+        
+        doc.deletePage(1); // Start with a fresh slate, no initial blank page.
+
         const margin = 50;
         const lineHeight = 16;
         const titleSize = 18;
         const bodySize = 11;
-        const contentWidth = pageWidth - margin * 2;
 
         let y = 0; // The cursor
-        let pageIsEmpty = true;
-
-        const addPageIfNeeded = () => {
-            doc.addPage();
-            y = margin;
-            pageIsEmpty = true;
+        
+        const drawHeader = (title: string) => {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(titleSize);
+          const titleLines = doc.splitTextToSize(title, pageWidth - margin * 2);
+          doc.text(titleLines, margin, y);
+          y += titleLines.length * titleSize + 10;
+          doc.setFont('helvetica', 'normal');
         };
 
-        const ensureSpace = (neededHeight: number, currentTitleForHeader: string) => {
+        const ensureSpace = (neededHeight: number, currentTitle: string) => {
             if (y + neededHeight > pageHeight - margin) {
-                addPageIfNeeded();
+                doc.addPage();
+                y = margin;
                 // Redraw header on the new page
-                doc.setFont('helvetica', 'bold');
-                doc.setFontSize(titleSize);
-                doc.text(currentTitleForHeader, margin, y);
-                y += titleSize + 10;
-                doc.setFont('helvetica', 'normal');
-                pageIsEmpty = false;
+                drawHeader(currentTitle);
             }
         };
 
         slides.forEach((slide, slideIndex) => {
-            addPageIfNeeded();
+            doc.addPage();
+            y = margin;
 
-            // Draw slide title
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(titleSize);
-            const titleLines = doc.splitTextToSize(slide.title, contentWidth);
-            ensureSpace(titleLines.length * titleSize, slide.title);
-            doc.text(titleLines, margin, y);
-            y += titleLines.length * titleSize + 10;
-            doc.setFont('helvetica', 'normal');
-            pageIsEmpty = false;
-
+            drawHeader(slide.title);
 
             // Draw content
             slide.content.forEach(item => {
@@ -329,7 +320,7 @@ export function SlideEditor({
                     case 'paragraph':
                     case 'note': {
                         const text = item.type === 'note' ? `Note: ${item.text}` : item.text;
-                        const lines = doc.splitTextToSize(text, contentWidth);
+                        const lines = doc.splitTextToSize(text, pageWidth - margin * 2);
                         const needed = lines.length * lineHeight;
                         ensureSpace(needed, slide.title);
                         
@@ -339,7 +330,6 @@ export function SlideEditor({
 
                         y += needed;
                         y += 10; // Gap after block
-                        pageIsEmpty = false;
                         break;
                     }
 
@@ -347,8 +337,8 @@ export function SlideEditor({
                     case 'numbered_list': {
                         item.items.forEach((bulletText, index) => {
                             const prefix = item.type === 'bullet_list' ? '•  ' : `${index + 1}.  `;
-                            const textLines = doc.splitTextToSize(bulletText, contentWidth - 15); // 15 for prefix and indent
-                            const needed = textLines.length * lineHeight + 4; // Add small gap
+                            const textLines = doc.splitTextToSize(bulletText, pageWidth - margin * 2 - 15);
+                            const needed = textLines.length * lineHeight + 4;
                             ensureSpace(needed, slide.title);
                             
                             doc.text(prefix + textLines[0], margin, y);
@@ -360,7 +350,6 @@ export function SlideEditor({
                                     y += lineHeight;
                                 }
                             }
-                            pageIsEmpty = false;
                         });
                         y += 10; // Gap after list
                         break;
@@ -370,17 +359,6 @@ export function SlideEditor({
                         const head = [item.headers];
                         const body = item.rows.map(row => row.cells);
                         
-                        // We need to check if the autoTable will start off the page
-                        if (y > pageHeight - margin - 40) { // 40 is a guess for min table height
-                           addPageIfNeeded();
-                           // Redraw header if needed
-                           doc.setFont('helvetica', 'bold');
-                           doc.setFontSize(titleSize);
-                           doc.text(slide.title, margin, y);
-                           y += titleSize + 10;
-                           doc.setFont('helvetica', 'normal');
-                        }
-
                         autoTable(doc, {
                             head,
                             body,
@@ -390,7 +368,6 @@ export function SlideEditor({
                             headStyles: { fontStyle: 'bold' },
                         });
                         y = (doc as any).lastAutoTable.finalY + 20;
-                        pageIsEmpty = false;
                         break;
                     }
                 }
