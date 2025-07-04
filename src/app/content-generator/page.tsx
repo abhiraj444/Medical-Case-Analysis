@@ -46,7 +46,7 @@ export default function ContentGeneratorPage() {
 
    useEffect(() => {
     const caseId = searchParams.get('caseId');
-    if (caseId && user) {
+    if (caseId && user && caseId !== currentCaseId) {
       const loadCase = async () => {
         setIsLoading(true);
         try {
@@ -78,7 +78,7 @@ export default function ContentGeneratorPage() {
       };
       loadCase();
     }
-  }, [searchParams, user, router, toast]);
+  }, [searchParams, user, router, toast, currentCaseId]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -135,7 +135,6 @@ export default function ContentGeneratorPage() {
     setIsLoading(true);
     setResult(null);
     setSlides(null);
-    setCurrentCaseId(null);
 
     try {
       const image = imageFile ? await fileToDataUri(imageFile) : undefined;
@@ -162,9 +161,15 @@ export default function ContentGeneratorPage() {
           }
       };
       
-      const docRef = await addDoc(collection(db, 'cases'), caseData);
-      setCurrentCaseId(docRef.id);
-      toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
+      if (currentCaseId) {
+        const caseRef = doc(db, 'cases', currentCaseId);
+        await updateDoc(caseRef, caseData);
+        toast({ title: 'Case Updated', description: 'Your case has been updated in your history.' });
+      } else {
+        const docRef = await addDoc(collection(db, 'cases'), caseData);
+        setCurrentCaseId(docRef.id);
+        toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
+      }
 
     } catch (error) {
       console.error('Clinical question failed:', error);
@@ -187,7 +192,6 @@ export default function ContentGeneratorPage() {
     setIsLoading(true);
     setResult(null);
     setSlides(null);
-    setCurrentCaseId(null);
 
     try {
       const summaryResult = {
@@ -214,9 +218,15 @@ export default function ContentGeneratorPage() {
           }
       };
       
-      const docRef = await addDoc(collection(db, 'cases'), caseData);
-      setCurrentCaseId(docRef.id);
-      toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
+      if (currentCaseId) {
+        const caseRef = doc(db, 'cases', currentCaseId);
+        await updateDoc(caseRef, caseData);
+        toast({ title: 'Case Updated', description: 'Your case has been updated in your history.' });
+      } else {
+        const docRef = await addDoc(collection(db, 'cases'), caseData);
+        setCurrentCaseId(docRef.id);
+        toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
+      }
 
     } catch (error) {
        console.error('Topic submission failed:', error);

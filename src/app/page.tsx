@@ -14,7 +14,7 @@ import { DiagnosisCard } from '@/components/DiagnosisCard';
 import { Bot, FileText, Loader2, Upload, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 
 export default function DiagnosisPage() {
   const [patientData, setPatientData] = useState('');
@@ -22,6 +22,7 @@ export default function DiagnosisPage() {
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<AiDiagnosisOutput | null>(null);
+  const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
   
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -36,7 +37,7 @@ export default function DiagnosisPage() {
 
   useEffect(() => {
     const caseId = searchParams.get('caseId');
-    if (caseId && user) {
+    if (caseId && user && caseId !== currentCaseId) {
       const loadCase = async () => {
         setIsLoading(true);
         try {
@@ -48,6 +49,7 @@ export default function DiagnosisPage() {
             setFilePreviews(caseData.inputData.supportingDocuments || []);
             setFiles([]); // Can't restore File objects, but previews are shown
             setResults(caseData.outputData);
+            setCurrentCaseId(caseId);
             toast({ title: "Case Loaded", description: `Successfully loaded case: ${caseData.title}` });
           } else {
              toast({ title: "Error", description: "Could not find or access the specified case.", variant: 'destructive'});
@@ -63,7 +65,7 @@ export default function DiagnosisPage() {
       };
       loadCase();
     }
-  }, [searchParams, user, router, toast]);
+  }, [searchParams, user, router, toast, currentCaseId]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -128,10 +130,9 @@ export default function DiagnosisPage() {
       setResults(diagnosisResults);
       
       const title = diagnosisResults[0]?.diagnosis || 'New Diagnosis Case';
-
-      await addDoc(collection(db, 'cases'), {
+      const caseData = {
         userId: user.uid,
-        type: 'diagnosis',
+        type: 'diagnosis' as const,
         title,
         createdAt: serverTimestamp(),
         inputData: {
@@ -139,9 +140,17 @@ export default function DiagnosisPage() {
           supportingDocuments: supportingDocuments,
         },
         outputData: diagnosisResults,
-      });
+      };
 
-      toast({ title: 'Case Saved', description: 'Your diagnosis case has been saved to your history.' });
+      if (currentCaseId) {
+        const caseRef = doc(db, 'cases', currentCaseId);
+        await updateDoc(caseRef, caseData);
+        toast({ title: 'Case Updated', description: 'Your case has been updated in your history.' });
+      } else {
+        const docRef = await addDoc(collection(db, 'cases'), caseData);
+        setCurrentCaseId(docRef.id);
+        toast({ title: 'Case Saved', description: 'Your diagnosis case has been saved to your history.' });
+      }
 
     } catch (error) {
       console.error('Diagnosis failed:', error);
@@ -161,6 +170,7 @@ export default function DiagnosisPage() {
     setFiles([]);
     setFilePreviews([]);
     setResults(null);
+    setCurrentCaseId(null);
     router.push('/');
   };
 
