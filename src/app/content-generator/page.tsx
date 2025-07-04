@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit } from 'lucide-react';
+import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle } from 'lucide-react';
 import { SlideEditor } from '@/components/SlideEditor';
 import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
@@ -221,6 +221,18 @@ export default function ContentGeneratorPage() {
       setIsLoading(false);
     }
   };
+
+  const handleNewCase = () => {
+    setMode('question');
+    setQuestion('');
+    setImageFile(null);
+    setImagePreview(null);
+    setTopic('');
+    setResult(null);
+    setSlides(null);
+    setCurrentCaseId(null);
+    router.push('/content-generator');
+  };
   
   const isQuestionSubmitDisabled = !question.trim() && !imageFile;
   const isTopicSubmitDisabled = !topic.trim();
@@ -247,6 +259,7 @@ export default function ContentGeneratorPage() {
                 caseId={currentCaseId}
                 onRefresh={handleGeneratePresentation}
                 onSlidesUpdate={setSlides}
+                onNewCase={handleNewCase}
             />
        </div>
     );
@@ -359,10 +372,16 @@ export default function ContentGeneratorPage() {
                     </div>
                 )}
                 
-                <Button onClick={handleGeneratePresentation} disabled={isLoading} className="w-full sm:w-auto">
-                    {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
-                    Generate Presentation
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={handleGeneratePresentation} disabled={isLoading}>
+                      {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
+                      Generate Presentation
+                  </Button>
+                   <Button variant="outline" onClick={handleNewCase}>
+                      <PlusCircle />
+                      New Case
+                  </Button>
+                </div>
             </CardContent>
           </Card>
         )}

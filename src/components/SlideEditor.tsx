@@ -55,6 +55,7 @@ import {
   List,
   ListOrdered,
   Type,
+  PlusCircle,
 } from 'lucide-react';
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
@@ -95,6 +96,7 @@ interface SlideEditorProps {
   caseId: string | null;
   onRefresh: () => void;
   onSlidesUpdate: (slides: Slide[]) => void;
+  onNewCase: () => void;
 }
 
 const renderContentItem = (item: ContentItem, index: number) => {
@@ -172,6 +174,7 @@ export function SlideEditor({
   caseId,
   onRefresh,
   onSlidesUpdate,
+  onNewCase,
 }: SlideEditorProps) {
   const [slides, setSlides] = useState<Slide[]>(initialSlides);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
@@ -477,6 +480,14 @@ export function SlideEditor({
               />
             </div>
             <div className="flex items-end gap-2">
+               <Button
+                variant="outline"
+                onClick={onNewCase}
+                disabled={isModifying}
+              >
+                <PlusCircle />
+                New Case
+              </Button>
               <Button
                 variant="outline"
                 onClick={handleRefreshClick}

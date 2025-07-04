@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
-import { Bot, FileText, Loader2, Upload } from 'lucide-react';
+import { Bot, FileText, Loader2, Upload, PlusCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
@@ -156,6 +156,14 @@ export default function DiagnosisPage() {
     }
   };
   
+  const handleNewCase = () => {
+    setPatientData('');
+    setFiles([]);
+    setFilePreviews([]);
+    setResults(null);
+    router.push('/');
+  };
+
   if (authLoading || (!user && !searchParams.get('caseId'))) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center">
@@ -238,13 +246,23 @@ export default function DiagnosisPage() {
         <div className="space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="text-primary" />
-                AI Diagnosis Results
-              </CardTitle>
-              <CardDescription>
-                Provisional diagnoses based on the provided data.
-              </CardDescription>
+              <div className="flex items-start justify-between">
+                <div className="flex-grow">
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="text-primary" />
+                    AI Diagnosis Results
+                  </CardTitle>
+                  <CardDescription>
+                    Provisional diagnoses based on the provided data.
+                  </CardDescription>
+                </div>
+                {results && (
+                  <Button variant="outline" onClick={handleNewCase} className="ml-4 flex-shrink-0">
+                    <PlusCircle />
+                    New Case
+                  </Button>
+                )}
+              </div>
             </CardHeader>
           </Card>
           
