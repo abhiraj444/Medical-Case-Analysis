@@ -4,6 +4,7 @@ import { useState, type ChangeEvent, type ClipboardEvent, useEffect } from 'reac
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiDiagnosis, type AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
 import { summarizeQuestion } from '@/ai/flows/summarize-question';
+import { answerClinicalQuestion, type AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
-import { Bot, FileText, Loader2, Upload, PlusCircle } from 'lucide-react';
+import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Lightbulb } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -25,6 +26,7 @@ export default function DiagnosisPage() {
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<AiDiagnosisOutput | null>(null);
+  const [clinicalAnswer, setClinicalAnswer] = useState<AnswerClinicalQuestionOutput | null>(null);
   const [structuredQuestion, setStructuredQuestion] = useState<StructuredQuestion | null>(null);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
   
@@ -53,7 +55,16 @@ export default function DiagnosisPage() {
             setFilePreviews(caseData.inputData.supportingDocuments || []);
             setFiles([]); // Can't restore File objects, but previews are shown
             setStructuredQuestion(caseData.inputData.structuredQuestion || null);
-            setResults(caseData.outputData);
+            
+            // Handle old and new data structures for backward compatibility
+            if (Array.isArray(caseData.outputData)) {
+              setResults(caseData.outputData);
+              setClinicalAnswer(null);
+            } else {
+              setResults(caseData.outputData.diagnoses);
+              setClinicalAnswer(caseData.outputData.clinicalAnswer || null);
+            }
+
             setCurrentCaseId(caseId);
             toast({ title: "Case Loaded", description: `Successfully loaded case: ${caseData.title}` });
           } else {
@@ -125,12 +136,13 @@ export default function DiagnosisPage() {
 
     setIsLoading(true);
     setResults(null);
+    setClinicalAnswer(null);
     setStructuredQuestion(null);
 
     try {
       const supportingDocuments = await Promise.all(files.map(fileToDataUri));
       
-      const [diagnosisResults, summaryResponse] = await Promise.all([
+      const [diagnosisResults, summaryResponse, answerResponse] = await Promise.all([
         aiDiagnosis({
           patientData: patientData.trim() ? patientData : undefined,
           supportingDocuments: supportingDocuments.length > 0 ? supportingDocuments : undefined,
@@ -138,14 +150,19 @@ export default function DiagnosisPage() {
         summarizeQuestion({
           question: patientData.trim() ? patientData : undefined,
           images: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+        }),
+        answerClinicalQuestion({
+          question: patientData.trim() ? patientData : undefined,
+          images: supportingDocuments.length > 0 ? supportingDocuments : undefined,
         })
       ]);
       
       setResults(diagnosisResults);
+      setClinicalAnswer(answerResponse);
       const newStructuredQuestion = { summary: summaryResponse.summary, images: supportingDocuments };
       setStructuredQuestion(newStructuredQuestion);
       
-      const title = diagnosisResults[0]?.diagnosis || 'New Diagnosis Case';
+      const title = diagnosisResults[0]?.diagnosis || answerResponse?.topic || 'New Diagnosis Case';
       const caseData = {
         userId: user.uid,
         type: 'diagnosis' as const,
@@ -156,7 +173,10 @@ export default function DiagnosisPage() {
           supportingDocuments: supportingDocuments,
           structuredQuestion: newStructuredQuestion,
         },
-        outputData: diagnosisResults,
+        outputData: {
+            diagnoses: diagnosisResults,
+            clinicalAnswer: answerResponse,
+        },
       };
 
       if (currentCaseId) {
@@ -187,9 +207,15 @@ export default function DiagnosisPage() {
     setFiles([]);
     setFilePreviews([]);
     setResults(null);
+    setClinicalAnswer(null);
     setCurrentCaseId(null);
     setStructuredQuestion(null);
     router.push('/');
+  };
+
+  const formatText = (text: string) => {
+    if (!text) return '';
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
   };
 
   if (authLoading || (!user && !searchParams.get('caseId'))) {
@@ -275,6 +301,30 @@ export default function DiagnosisPage() {
             <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
           )}
 
+          {clinicalAnswer && clinicalAnswer.answer && (
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <BrainCircuit className="text-primary"/>
+                        Direct Answer
+                    </CardTitle>
+                    <CardDescription>Topic: {clinicalAnswer.topic}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.answer)}}></div>
+                    {clinicalAnswer.reasoning && (
+                        <div className="rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
+                            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex items-center gap-2">
+                                <Lightbulb className="h-4 w-4" />
+                                Reasoning
+                            </h4>
+                            <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+          )}
+
           <Card className="shadow-lg">
             <CardHeader>
               <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -287,7 +337,7 @@ export default function DiagnosisPage() {
                     Provisional diagnoses based on the provided data.
                   </CardDescription>
                 </div>
-                {results && (
+                {(results || clinicalAnswer) && (
                   <Button
                     variant="outline"
                     onClick={handleNewCase}
@@ -334,7 +384,7 @@ export default function DiagnosisPage() {
                 <Card>
                   <CardContent className="p-6">
                     <p className="text-center text-muted-foreground">
-                      No diagnoses could be determined. Please provide more detailed information.
+                      No provisional diagnoses could be determined. Please provide more detailed information.
                     </p>
                   </CardContent>
                 </Card>
@@ -342,7 +392,7 @@ export default function DiagnosisPage() {
             </div>
           )}
           
-          {!isLoading && !results && !structuredQuestion && (
+          {!isLoading && !results && !structuredQuestion && !clinicalAnswer && (
              <Card>
                 <CardContent className="p-6">
                   <p className="text-center text-muted-foreground">

@@ -22,7 +22,10 @@ export interface DiagnosisCase extends BaseCase {
         supportingDocuments?: string[];
         structuredQuestion?: StructuredQuestion;
     };
-    outputData: AiDiagnosisOutput;
+    outputData: {
+        diagnoses: AiDiagnosisOutput;
+        clinicalAnswer: AnswerClinicalQuestionOutput | null;
+    };
 }
 
 export interface ContentCase extends BaseCase {
