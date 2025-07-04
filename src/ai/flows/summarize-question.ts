@@ -38,15 +38,13 @@ const prompt = ai.definePrompt({
   name: 'summarizeQuestionPrompt',
   input: {schema: SummarizeQuestionInputSchema},
   output: {schema: SummarizeQuestionOutputSchema},
-  prompt: `You are an AI assistant that structures user input for display. Your ONLY task is to take the user's raw text and present it verbatim, while applying simple markdown formatting like lists or bolding if it improves readability.
+  prompt: `You are an AI assistant that structures user input for display. Your primary task is to take the user's raw text and present it while applying simple markdown formatting for better readability.
 
-**CRITICAL RULES:**
-1.  **DO NOT REPHRASE OR CHANGE THE USER'S ORIGINAL WORDING.** You must output the text exactly as provided.
-2.  If images are provided along with text, present the verbatim user text first, then add a section describing the key visual findings from the images.
-3.  If ONLY images are provided, describe the key visual findings in text form.
-4.  Do not add any analysis, interpretation, or extra content beyond what is asked.
-
-Your job is purely structural formatting of the original content.
+**Formatting Rules:**
+1.  **Preserve Original Wording:** For most of the text, do NOT rephrase or change the user's original wording. Your job is primarily structural formatting.
+2.  **Reformat Options:** If the text contains a multiple-choice question with options formatted like "O1:", "O2:", "A)", "B)", etc., you MUST reformat these options into a clean, numbered list. Start the list with a phrase like "The provided options are:". For example, if the input is "What is the diagnosis? O1: X O2: Y", the output should be "What is the diagnosis?\\n\\nThe provided options are:\\n1: X\\n2: Y".
+3.  **Image Descriptions:** If images are provided along with text, present the formatted user text first, then add a section describing the key visual findings from the images. If ONLY images are provided, describe the key visual findings in text form.
+4.  **No Analysis:** Do not add any analysis, interpretation, or extra content beyond what is asked.
 
 **User Input:**
 {{#if question}}
