@@ -478,10 +478,8 @@ export function SlideEditor({
         <div id="printable-area">
           {/* Cover Slide */}
           <div className="printable-slide title-slide">
-              <h1 className="text-4xl font-bold text-primary">{topic}</h1>
-              <p className="mt-4 text-xl text-muted-foreground">
-                  An AI-Generated Presentation by MediGen
-              </p>
+              <h1>{topic}</h1>
+              <p>An AI-Generated Presentation by MediGen</p>
           </div>
 
           {/* Content Slides */}
