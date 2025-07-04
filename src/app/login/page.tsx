@@ -62,12 +62,17 @@ export default function LoginPage() {
       toast({ title: 'Login Successful', description: 'Welcome!' });
       router.push('/');
     } catch (error: any) {
-      console.error('Google sign-in failed:', error);
-      toast({
-        title: 'Google Sign-in Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Don't show an error toast if the user intentionally closed the popup
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log('Google sign-in popup closed by user.');
+      } else {
+        console.error('Google sign-in failed:', error);
+        toast({
+          title: 'Google Sign-in Failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
     } finally {
       setIsLoading(false);
     }
