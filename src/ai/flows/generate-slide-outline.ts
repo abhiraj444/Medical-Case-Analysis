@@ -10,6 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { Slide } from '@/types';
 
 const GenerateSlideOutlineInputSchema = z.object({
   topic: z.string().describe('The educational topic to generate a slide outline for.'),
@@ -65,7 +66,8 @@ const GenerateSlideOutlineOutputSchema = z.array(SlideSchema);
 export type GenerateSlideOutlineOutput = z.infer<typeof GenerateSlideOutlineOutputSchema>;
 
 export async function generateSlideOutline(input: GenerateSlideOutlineInput): Promise<GenerateSlideOutlineOutput> {
-  return generateSlideOutlineFlow(input);
+  const result = await generateSlideOutlineFlow(input) as Slide[];
+  return result;
 }
 
 const prompt = ai.definePrompt({
@@ -80,6 +82,7 @@ Format the entire output as a JSON array of slide objects. Each slide object mus
 1.  **Slide Object**: Each slide is an object with a "title" (string) and a "content" (array of content items).
 2.  **Content Breakdown**: Deconstruct complex topics into multiple small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs; use lists to convey information concisely. For each slide, aim for a maximum of 6-8 distinct points (bullets, list items, or table rows) to ensure clarity and readability.
 3.  **Content Array**: The "content" array contains different types of content objects. Do NOT put too much content on a single slide; create more slides if a topic is complex. Each content item must be an object with a "type" field.
+4.  **Bolding**: For "paragraph" items, use the \`bold\` array to specify substrings of the \`text\` that should be bolded. **Do NOT use markdown like \`**text**\` inside any text fields.**
 
 Supported "type" values for content items:
 - **"paragraph"**: For a block of text. This should be used sparingly.

@@ -1,7 +1,39 @@
 import type { Timestamp } from 'firebase/firestore';
 import type { AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
 import type { AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
-import type { Slide } from '@/components/SlideEditor';
+
+// For structured slide content
+export interface ParagraphContent {
+    type: 'paragraph';
+    text: string;
+    bold?: string[];
+}
+export interface BulletListContent {
+    type: 'bullet_list';
+    items: string[];
+}
+export interface NumberedListContent {
+    type: 'numbered_list';
+    items: string[];
+}
+export interface NoteContent {
+    type: 'note';
+    text: string;
+}
+export interface TableRowContent {
+    cells: string[];
+}
+export interface TableContent {
+    type: 'table';
+    headers: string[];
+    rows: TableRowContent[];
+}
+export type ContentItem = ParagraphContent | BulletListContent | NumberedListContent | NoteContent | TableContent;
+
+export interface Slide {
+    title: string;
+    content: ContentItem[];
+}
 
 export interface StructuredQuestion {
     summary: string;

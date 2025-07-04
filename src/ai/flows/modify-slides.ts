@@ -8,6 +8,7 @@
  */
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { Slide } from '@/types';
 
 // Schemas for structured content
 const ParagraphSchema = z.object({
@@ -66,7 +67,8 @@ export type ModifySlidesOutput = z.infer<typeof ModifySlidesOutputSchema>;
 
 
 export async function modifySlides(input: ModifySlidesInput): Promise<ModifySlidesOutput> {
-  return modifySlidesFlow(input);
+  const result = await modifySlidesFlow(input) as Slide[];
+  return result;
 }
 
 const prompt = ai.definePrompt({
@@ -86,6 +88,7 @@ SELECTED SLIDE INDICES:
 INSTRUCTIONS:
 - Your response MUST be a complete array of all slides (modified and unmodified) in the correct order, conforming to the JSON schema.
 - **CRITICAL**: Break down complex topics into many small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs. Aim for 6-8 distinct points per slide.
+- **Bolding**: For "paragraph" items, use the \`bold\` array to specify substrings of the \`text\` that should be bolded. **Do NOT use markdown like \`**text**\` inside any text fields.**
 - If the action is 'expand_content':
   - Take the topics from the selected slides.
   - Generate more detailed content for these topics. This may result in creating MORE slides than were originally selected.

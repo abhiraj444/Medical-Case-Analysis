@@ -98,6 +98,10 @@ body {
     display: flex;
     flex-direction: column;
   }
+  
+  .printable-slide:last-child {
+    page-break-after: avoid;
+  }
 
   .printable-slide h1 {
     font-size: 24pt;
@@ -148,5 +152,6 @@ body {
     font-style: italic;
     color: #333 !important;
     font-size: 10pt;
+    margin-top: 1rem;
   }
 }

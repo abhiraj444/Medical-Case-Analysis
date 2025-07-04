@@ -57,67 +57,34 @@ import {
   ListOrdered,
   Type,
   PlusCircle,
+  File,
 } from 'lucide-react';
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
+import type { Slide, ContentItem, ParagraphContent } from '@/types';
 
-// Data structures for the structured JSON content
-interface ParagraphContent {
-  type: 'paragraph';
-  text: string;
-}
-interface BulletList {
-  type: 'bullet_list';
-  items: string[];
-}
-interface NumberedList {
-  type: 'numbered_list';
-  items: string[];
-}
-interface Note {
-  type: 'note';
-  text: string;
-}
-interface TableRow {
-  cells: string[];
-}
-interface TableContent {
-  type: 'table';
-  headers: string[];
-  rows: TableRow[];
-}
-export type ContentItem = ParagraphContent | BulletList | NumberedList | Note | TableContent;
-export interface Slide {
-  title: string;
-  content: ContentItem[];
-}
 
-interface SlideEditorProps {
-  initialSlides: Slide[];
-  topic: string;
-  caseId: string | null;
-  onRefresh: () => void;
-  onSlidesUpdate: (slides: Slide[]) => void;
-  onNewCase: () => void;
-}
-
-// A simple component to render markdown-like bolding.
-const SimpleMarkdown = ({ text }: { text: string | null | undefined }) => {
+const BoldRenderer = ({ text, bold }: { text: string; bold?: string[] }) => {
   if (!text) return null;
-  // This regex finds **text** and replaces it.
-  const parts = text.split(/(\*\*.*?\*\*)/g);
+  if (!bold || bold.length === 0) {
+    return <>{text}</>;
+  }
+
+  // Escape special characters for regex and join with '|'
+  const boldEscaped = bold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+  const regex = new RegExp(`(${boldEscaped.join('|')})`, 'g');
+  const parts = text.split(regex).filter(Boolean);
+
   return (
     <>
-      {parts.map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={i}>{part.slice(2, -2)}</strong>;
-        }
-        return part;
-      })}
+      {parts.map((part, i) =>
+        bold.includes(part) ? <strong key={i}>{part}</strong> : part
+      )}
     </>
   );
 };
+
 
 const renderContentItem = (item: ContentItem, index: number) => {
   const getIcon = () => {
@@ -130,38 +97,40 @@ const renderContentItem = (item: ContentItem, index: number) => {
       default: return null;
     }
   };
+  
+  const isParagraph = (content: ContentItem): content is ParagraphContent => content.type === 'paragraph';
 
   return (
     <div key={index} className="mb-2 flex items-start gap-3 rounded-md border p-3">
        <span className="text-muted-foreground pt-1">{getIcon()}</span>
        <div className='w-full'>
-            {item.type === 'paragraph' && (
-                <p><SimpleMarkdown text={item.text} /></p>
+            {isParagraph(item) && (
+                <p><BoldRenderer text={item.text} bold={item.bold} /></p>
             )}
             {item.type === 'bullet_list' && (
                 <ul className="list-disc pl-5">
-                {item.items.map((bullet, i) => <li key={i}><SimpleMarkdown text={bullet} /></li>)}
+                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
                 </ul>
             )}
             {item.type === 'numbered_list' && (
                 <ol className="list-decimal pl-5">
-                {item.items.map((bullet, i) => <li key={i}><SimpleMarkdown text={bullet} /></li>)}
+                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
                 </ol>
             )}
             {item.type === 'note' && (
-                <p className="text-sm italic text-muted-foreground">Note: <SimpleMarkdown text={item.text} /></p>
+                <p className="text-sm italic text-muted-foreground">Note: {item.text}</p>
             )}
             {item.type === 'table' && (
                 <ShadcnTable>
                 <TableHeader>
                     <ShadcnTableRow>
-                    {item.headers.map((header, i) => <TableHead key={i}><SimpleMarkdown text={header} /></TableHead>)}
+                    {item.headers.map((header, i) => <TableHead key={i}>{header}</TableHead>)}
                     </ShadcnTableRow>
                 </TableHeader>
                 <TableBody>
                     {item.rows.map((row, i) => (
                     <ShadcnTableRow key={i}>
-                        {row.cells.map((cell, j) => <ShadcnTableCell key={j}><SimpleMarkdown text={cell} /></ShadcnTableCell>)}
+                        {row.cells.map((cell, j) => <ShadcnTableCell key={j}>{cell}</ShadcnTableCell>)}
                     </ShadcnTableRow>
                     ))}
                 </TableBody>
@@ -180,7 +149,14 @@ export function SlideEditor({
   onRefresh,
   onSlidesUpdate,
   onNewCase,
-}: SlideEditorProps) {
+}: {
+  initialSlides: Slide[];
+  topic: string;
+  caseId: string | null;
+  onRefresh: () => void;
+  onSlidesUpdate: (slides: Slide[]) => void;
+  onNewCase: () => void;
+}) {
   const [slides, setSlides] = useState<Slide[]>(initialSlides);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [topic, setTopic] = useState(initialTopic);
@@ -200,6 +176,7 @@ export function SlideEditor({
       // Delay printing slightly to ensure DOM is updated with the printable content
       setTimeout(() => {
         window.print();
+        // The afterprint event listener will handle cleanup.
       }, 100);
     }
   }, [isPrinting]);
@@ -325,15 +302,19 @@ export function SlideEditor({
   const handleExport = async () => {
     setIsModifying(true);
     
-    const createRunsFromMarkdown = (text: string): TextRun[] => {
-        if (!text) return [new TextRun({ text: '' })];
-        const parts = text.split(/(\*\*.*?\*\*)/g);
-        return parts.filter(part => part).map(part => {
-            if (part.startsWith('**') && part.endsWith('**')) {
-                return new TextRun({ text: part.slice(2, -2), bold: true });
-            }
-            return new TextRun({ text: part });
-        });
+    const createTextRuns = (text: string, bold?: string[]): TextRun[] => {
+      if (!text) return [new TextRun({ text: '' })];
+      if (!bold || bold.length === 0) {
+          return [new TextRun({ text })];
+      }
+      
+      const boldEscaped = bold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+      const regex = new RegExp(`(${boldEscaped.join('|')})`, 'g');
+      const parts = text.split(regex).filter(Boolean);
+
+      return parts.map(part => {
+          return new TextRun({ text: part, bold: bold.includes(part) });
+      });
     };
 
     try {
@@ -353,7 +334,7 @@ export function SlideEditor({
             case 'paragraph': {
               docChildren.push(
                 new Paragraph({
-                  children: createRunsFromMarkdown(item.text),
+                  children: createTextRuns(item.text, item.bold),
                   spacing: { after: 100 },
                 })
               );
@@ -362,14 +343,14 @@ export function SlideEditor({
             case 'bullet_list':
               item.items.forEach((bulletText) => {
                 docChildren.push(
-                  new Paragraph({ children: createRunsFromMarkdown(bulletText), bullet: { level: 0 }, spacing: { after: 50 } })
+                  new Paragraph({ text: bulletText, bullet: { level: 0 }, spacing: { after: 50 } })
                 );
               });
               break;
             case 'numbered_list':
               item.items.forEach((numberedText) => {
                 docChildren.push(
-                  new Paragraph({ children: createRunsFromMarkdown(numberedText), numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
+                  new Paragraph({ text: numberedText, numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
                 );
               });
               break;
@@ -380,7 +361,7 @@ export function SlideEditor({
                     new TableCell({
                       children: [
                         new Paragraph({
-                          children: createRunsFromMarkdown(header),
+                          children: createTextRuns(header),
                           alignment: AlignmentType.CENTER,
                         }),
                       ],
@@ -396,7 +377,7 @@ export function SlideEditor({
                 (row) =>
                   new DocxTableRow({
                     children: row.cells.map(
-                      (cellText) => new TableCell({ children: [new Paragraph({ children: createRunsFromMarkdown(cellText) })] })
+                      (cellText) => new TableCell({ children: [new Paragraph({ children: createTextRuns(cellText) })] })
                     ),
                   })
               );
@@ -422,9 +403,8 @@ export function SlideEditor({
             }
             case 'note':
               const noteRuns: TextRun[] = [new TextRun({ text: 'Note: ', italic: true })];
-              const contentRuns = createRunsFromMarkdown(item.text);
+              const contentRuns = createTextRuns(item.text);
               contentRuns.forEach(run => {
-                // Ensure options object exists before setting italic property
                 if (!run.options) {
                   run.options = {};
                 }
@@ -500,43 +480,46 @@ export function SlideEditor({
             <div key={`print-${slideIndex}`} className="printable-slide">
               <h1>{slide.title}</h1>
               {slide.content.map((item, itemIndex) => {
-                switch (item.type) {
-                  case 'paragraph':
-                    return <p key={itemIndex}><SimpleMarkdown text={item.text} /></p>;
-                  case 'bullet_list':
-                    return (
-                      <ul key={itemIndex} className="list-disc pl-5">
-                        {item.items.map((bullet, i) => <li key={i}><SimpleMarkdown text={bullet} /></li>)}
-                      </ul>
-                    );
-                  case 'numbered_list':
-                    return (
-                      <ol key={itemIndex} className="list-decimal pl-5">
-                        {item.items.map((num_item, i) => <li key={i}><SimpleMarkdown text={num_item} /></li>)}
-                      </ol>
-                    );
-                  case 'note':
-                    return <p key={itemIndex} className="note">Note: <SimpleMarkdown text={item.text} /></p>;
-                  case 'table':
-                    return (
-                      <table key={itemIndex}>
-                        <thead>
-                          <tr>
-                            {item.headers.map((header, i) => <th key={i}><SimpleMarkdown text={header} /></th>)}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {item.rows.map((row, i) => (
-                            <tr key={i}>
-                              {row.cells.map((cell, j) => <td key={j}><SimpleMarkdown text={cell} /></td>)}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    );
-                  default:
-                    return null;
+                const isParagraph = (content: ContentItem): content is ParagraphContent => content.type === 'paragraph';
+                if (isParagraph(item)) {
+                  return <p key={itemIndex}><BoldRenderer text={item.text} bold={item.bold} /></p>;
                 }
+                if (item.type === 'bullet_list') {
+                  return (
+                    <ul key={itemIndex}>
+                      {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                    </ul>
+                  );
+                }
+                if (item.type === 'numbered_list') {
+                  return (
+                    <ol key={itemIndex}>
+                      {item.items.map((num_item, i) => <li key={i}>{num_item}</li>)}
+                    </ol>
+                  );
+                }
+                if (item.type === 'note') {
+                  return <p key={itemIndex} className="note">Note: {item.text}</p>;
+                }
+                if (item.type === 'table') {
+                  return (
+                    <table key={itemIndex}>
+                      <thead>
+                        <tr>
+                          {item.headers.map((header, i) => <th key={i}>{header}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {item.rows.map((row, i) => (
+                          <tr key={i}>
+                            {row.cells.map((cell, j) => <td key={j}>{cell}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                }
+                return null;
               })}
             </div>
           ))}
@@ -612,7 +595,7 @@ export function SlideEditor({
                 disabled={isModifying || slides.length === 0}
                 className="w-full sm:w-auto"
               >
-                <FileDown />
+                <File />
                 Word Document
               </Button>
               <Button
