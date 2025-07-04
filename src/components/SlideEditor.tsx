@@ -241,6 +241,10 @@ export function SlideEditor({
   const handleModifySlides = async (
     action: 'expand_content' | 'replace_content' | 'expand_selected'
   ) => {
+    if (selectedIndices.length === 0) {
+      toast({ title: 'No Sections Selected', description: 'Please select sections to modify.', variant: 'destructive' });
+      return;
+    }
     setIsModifying(true);
     setIsRefreshModalOpen(false);
     try {

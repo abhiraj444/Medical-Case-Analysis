@@ -16,7 +16,7 @@ import { SlideEditor } from '@/components/SlideEditor';
 import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 
 
 export default function ContentGeneratorPage() {
@@ -56,6 +56,8 @@ export default function ContentGeneratorPage() {
             const caseData = caseSnap.data();
             setMode(caseData.inputData.mode);
             setQuestion(caseData.inputData.question || '');
+            // We can't restore the File object, but we can show the preview
+            setImageFile(null);
             setImagePreview(caseData.inputData.image || null);
             setTopic(caseData.inputData.topic || '');
             setResult(caseData.outputData.result);
@@ -126,6 +128,10 @@ export default function ContentGeneratorPage() {
 
   const handleQuestionSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!user) {
+      toast({ title: "Not Authenticated", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
     setResult(null);
     setSlides(null);
@@ -138,6 +144,28 @@ export default function ContentGeneratorPage() {
         image,
       });
       setResult(response);
+
+      const caseData = {
+          userId: user.uid,
+          type: 'content-generator' as const,
+          title: response.topic,
+          createdAt: serverTimestamp(),
+          inputData: {
+              mode: 'question' as const,
+              question: question.trim() || null,
+              image: image || null,
+              topic: null,
+          },
+          outputData: {
+              result: response,
+              slides: null,
+          }
+      };
+      
+      const docRef = await addDoc(collection(db, 'cases'), caseData);
+      setCurrentCaseId(docRef.id);
+      toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
+
     } catch (error) {
       console.error('Clinical question failed:', error);
       toast({
@@ -152,6 +180,10 @@ export default function ContentGeneratorPage() {
   
   const handleTopicSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+     if (!user) {
+      toast({ title: "Not Authenticated", description: "You must be logged in.", variant: "destructive" });
+      return;
+    }
     setIsLoading(true);
     setResult(null);
     setSlides(null);
@@ -164,6 +196,27 @@ export default function ContentGeneratorPage() {
           topic: topic,
       };
       setResult(summaryResult);
+
+      const caseData = {
+          userId: user.uid,
+          type: 'content-generator' as const,
+          title: topic,
+          createdAt: serverTimestamp(),
+          inputData: {
+              mode: 'topic' as const,
+              question: null,
+              image: null,
+              topic: topic.trim() || null,
+          },
+          outputData: {
+              result: summaryResult,
+              slides: null,
+          }
+      };
+      
+      const docRef = await addDoc(collection(db, 'cases'), caseData);
+      setCurrentCaseId(docRef.id);
+      toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
 
     } catch (error) {
        console.error('Topic submission failed:', error);
@@ -178,38 +231,24 @@ export default function ContentGeneratorPage() {
   }
 
   const handleGeneratePresentation = async () => {
-    if (!result?.topic || !user) return;
+    if (!result?.topic || !user || !currentCaseId) {
+      if (!currentCaseId) {
+        toast({ title: "Error", description: "Cannot generate presentation without a saved case.", variant: "destructive" });
+      }
+      return;
+    }
 
     setIsLoading(true);
-    setSlides(null);
-
     try {
       const generatedSlides = await generateSlideOutline({ topic: result.topic });
       setSlides(generatedSlides);
 
-      const image = imageFile ? await fileToDataUri(imageFile) : undefined;
-      const caseData = {
-          userId: user.uid,
-          type: 'content-generator',
-          title: result.topic,
-          createdAt: serverTimestamp(),
-          inputData: {
-              mode,
-              question: question.trim() || null,
-              image: image || null,
-              topic: topic.trim() || null,
-          },
-          outputData: {
-              result: result,
-              slides: generatedSlides,
-          }
-      };
-      
-      const docRef = await addDoc(collection(db, 'cases'), caseData);
-      setCurrentCaseId(docRef.id);
+      const caseRef = doc(db, 'cases', currentCaseId);
+      await updateDoc(caseRef, {
+        'outputData.slides': generatedSlides,
+      });
 
-      toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
-
+      toast({ title: 'Presentation Generated', description: 'Your presentation has been added to the case.' });
     } catch (error) {
       console.error('Outline generation failed:', error);
       toast({
@@ -258,7 +297,13 @@ export default function ContentGeneratorPage() {
                 topic={result.topic}
                 caseId={currentCaseId}
                 onRefresh={handleGeneratePresentation}
-                onSlidesUpdate={setSlides}
+                onSlidesUpdate={(updatedSlides) => {
+                    setSlides(updatedSlides);
+                    if (currentCaseId) {
+                        const caseRef = doc(db, 'cases', currentCaseId);
+                        updateDoc(caseRef, { 'outputData.slides': updatedSlides });
+                    }
+                }}
                 onNewCase={handleNewCase}
             />
        </div>
@@ -339,7 +384,7 @@ export default function ContentGeneratorPage() {
           </CardContent>
         </Card>
 
-        {(isLoading && !slides) && (
+        {(isLoading && !result) && (
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-center gap-2 text-muted-foreground">

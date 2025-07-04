@@ -29,7 +29,7 @@ export interface ContentCase extends BaseCase {
     };
     outputData: {
         result: AnswerClinicalQuestionOutput;
-        slides: Slide[];
+        slides: Slide[] | null;
     };
 }
 
