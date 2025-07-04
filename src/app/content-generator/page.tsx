@@ -16,8 +16,10 @@ import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle, Cop
 import { SlideEditor } from '@/components/SlideEditor';
 import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
 import type { StructuredQuestion } from '@/types';
 import { QuestionDisplay } from '@/components/QuestionDisplay';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -136,21 +138,32 @@ export default function ContentGeneratorPage() {
     setStructuredQuestion(null);
 
     try {
-      const images = await Promise.all(imageFiles.map(fileToDataUri));
+      // Data URIs for AI call
+      const imagesDataUris = await Promise.all(imageFiles.map(fileToDataUri));
+
+      // NEW: Upload files to Storage and get public URLs for saving
+      const uploadFile = async (file: File): Promise<string> => {
+        if (!storage || !user) return '';
+        const filePath = `user_uploads/${user.uid}/${uuidv4()}-${file.name}`;
+        const storageRef = ref(storage, filePath);
+        await uploadBytes(storageRef, file);
+        return getDownloadURL(storageRef);
+      };
+      const imagesStorageUrls = await Promise.all(imageFiles.map(uploadFile));
       
       const [response, summaryResponse] = await Promise.all([
         answerClinicalQuestion({
           question: question.trim() || undefined,
-          images: images.length > 0 ? images : undefined,
+          images: imagesDataUris.length > 0 ? imagesDataUris : undefined,
         }),
         summarizeQuestion({
           question: question.trim() || undefined,
-          images: images.length > 0 ? images : undefined,
+          images: imagesDataUris.length > 0 ? imagesDataUris : undefined,
         })
       ]);
 
       setResult(response);
-      const newStructuredQuestion = { summary: summaryResponse.summary, images: images };
+      const newStructuredQuestion = { summary: summaryResponse.summary, images: imagesStorageUrls };
       setStructuredQuestion(newStructuredQuestion);
 
       const caseData = {
@@ -161,7 +174,7 @@ export default function ContentGeneratorPage() {
           inputData: {
               mode: 'question' as const,
               question: question.trim() || null,
-              images: images.length > 0 ? images : null,
+              images: imagesStorageUrls.length > 0 ? imagesStorageUrls : null,
               topic: null,
               structuredQuestion: newStructuredQuestion,
           },
@@ -185,7 +198,10 @@ export default function ContentGeneratorPage() {
       console.error('Clinical question failed:', error);
       toast({
         title: 'An Error Occurred',
-        description: 'Failed to get an answer. Please try again.',
+        description:
+          error instanceof Error && error.message.includes('storage/unauthorized')
+            ? 'Storage permission denied. Please check your Firebase Storage rules.'
+            : 'Failed to get an answer. Please try again.',
         variant: 'destructive',
       });
     } finally {
