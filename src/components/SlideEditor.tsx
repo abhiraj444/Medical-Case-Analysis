@@ -196,7 +196,7 @@ export function SlideEditor({
 
   useEffect(() => {
     if (isPrinting) {
-      document.body.classList.add('printing');
+      document.body.classList.add('medigen-printing');
       // Delay printing slightly to ensure DOM is updated with the printable content
       setTimeout(() => {
         window.print();
@@ -206,7 +206,7 @@ export function SlideEditor({
 
   useEffect(() => {
     const handleAfterPrint = () => {
-      document.body.classList.remove('printing');
+      document.body.classList.remove('medigen-printing');
       setIsPrinting(false);
     };
 
@@ -553,10 +553,18 @@ export function SlideEditor({
           </div>
         )}
         <CardHeader>
-          <CardTitle>Content Editor</CardTitle>
-          <CardDescription>
-            Review, edit, and modify your content before exporting.
-          </CardDescription>
+           <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Content Editor</CardTitle>
+                <CardDescription>
+                  Review, edit, and modify your content before exporting.
+                </CardDescription>
+              </div>
+              <Button variant="outline" onClick={onNewCase} disabled={isModifying} className="w-full shrink-0 sm:w-auto">
+                  <PlusCircle />
+                  New Case
+              </Button>
+            </div>
           <div className="flex flex-col gap-4 pt-4 md:flex-row md:items-end">
             <div className="flex-grow space-y-1">
               <Label
@@ -576,6 +584,7 @@ export function SlideEditor({
                 variant="outline"
                 onClick={handleRefreshClick}
                 disabled={isModifying}
+                className="w-full sm:w-auto"
               >
                 <RefreshCw />
                 Refresh Topic
@@ -584,6 +593,7 @@ export function SlideEditor({
                 variant="outline"
                 onClick={addSlide}
                 disabled={isModifying}
+                className="w-full sm:w-auto"
               >
                 <Plus />
                 Add Section
@@ -592,6 +602,7 @@ export function SlideEditor({
                 variant="outline"
                 onClick={handleCopyRawContent}
                 disabled={isModifying || slides.length === 0}
+                className="w-full sm:w-auto"
               >
                 <ClipboardCopy />
                 Copy Raw Content
@@ -599,6 +610,7 @@ export function SlideEditor({
               <Button
                 onClick={handleExport}
                 disabled={isModifying || slides.length === 0}
+                className="w-full sm:w-auto"
               >
                 <FileDown />
                 Word Document
@@ -606,6 +618,7 @@ export function SlideEditor({
               <Button
                 onClick={handleGeneratePdf}
                 disabled={isModifying || slides.length === 0}
+                className="w-full sm:w-auto"
               >
                 <FileDown />
                 PDF Document

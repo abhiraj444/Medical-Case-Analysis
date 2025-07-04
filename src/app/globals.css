@@ -73,7 +73,7 @@ body {
 }
 
 @media print {
-  body.printing * {
+  body.medigen-printing * {
     visibility: hidden;
   }
 

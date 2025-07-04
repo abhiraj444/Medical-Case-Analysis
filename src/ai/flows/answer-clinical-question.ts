@@ -51,7 +51,7 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   Based on your analysis, provide the following in JSON format:
-  1.  "answer": A detailed, clear answer to the user's question. Use markdown for formatting, such as **bolding** key terms.
+  1.  "answer": A detailed, clear answer to the user's question. If the user's question includes options (e.g., A, B, C, D), you MUST start your answer by stating the correct option first (e.g., "The correct answer is C.") before providing the full explanation. Use markdown for formatting, such as **bolding** key terms.
   2.  "reasoning": A step-by-step explanation of how you arrived at the answer. Highlight the key findings from the provided text or image. Use markdown for formatting.
   3.  "topic": A short, clear topic title suitable for a presentation based on the question. For example, if the question is about treating a specific condition, the topic could be "Treatment of [Condition]".
 `,
