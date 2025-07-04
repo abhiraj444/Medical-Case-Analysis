@@ -6,7 +6,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithRedirect,
+  signInWithPopup,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -68,15 +68,20 @@ export default function LoginPage() {
     setIsLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithRedirect(auth, provider);
-      // The user is redirected, so the loading state will be reset on page reload.
+      await signInWithPopup(auth, provider);
+      toast({ title: 'Login Successful', description: 'Welcome!' });
+      // The useEffect will handle the redirect to '/'
     } catch (error: any) {
       console.error('Google sign-in failed:', error);
-      toast({
-        title: 'Google Sign-in Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Don't show an error toast if the user simply closes the popup
+      if (error.code !== 'auth/popup-closed-by-user') {
+        toast({
+          title: 'Google Sign-in Failed',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
+    } finally {
       setIsLoading(false);
     }
   };
