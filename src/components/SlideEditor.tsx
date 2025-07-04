@@ -2,6 +2,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   Document,
   Packer,
@@ -141,47 +143,6 @@ const renderContentItem = (item: ContentItem, index: number) => {
   );
 };
 
-const PrintableContent = ({ slides }: { slides: Slide[] }) => {
-    return (
-        <div id="printable-area">
-            {slides.map((slide, index) => (
-                <div key={index} className="printable-slide">
-                    <h1>{slide.title}</h1>
-                    <div className="prose">
-                        {slide.content.map((item, itemIndex) => {
-                            switch (item.type) {
-                                case 'paragraph':
-                                    return <p key={itemIndex}><BoldRenderer text={item.text} bold={item.bold} /></p>;
-                                case 'bullet_list':
-                                    return <ul key={itemIndex}>{item.items.map((li, i) => <li key={i}><BoldRenderer text={li} /></li>)}</ul>;
-                                case 'numbered_list':
-                                    return <ol key={itemIndex}>{item.items.map((li, i) => <li key={i}><BoldRenderer text={li} /></li>)}</ol>;
-                                case 'note':
-                                    return <p key={itemIndex} className="text-xs italic">Note: {item.text}</p>;
-                                case 'table':
-                                    return (
-                                        <table key={itemIndex}>
-                                            <thead>
-                                                <tr>{item.headers.map((h, i) => <th key={i}>{h}</th>)}</tr>
-                                            </thead>
-                                            <tbody>
-                                                {item.rows.map((row, i) => (
-                                                    <tr key={i}>{row.cells.map((cell, j) => <td key={j}><BoldRenderer text={cell} /></td>)}</tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    );
-                                default:
-                                    return null;
-                            }
-                        })}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-};
-
 export function SlideEditor({
   initialSlides,
   topic: initialTopic,
@@ -208,16 +169,6 @@ export function SlideEditor({
     setSlides(initialSlides);
     setSelectedIndices([]);
   }, [initialSlides]);
-
-  useEffect(() => {
-    const handleAfterPrint = () => {
-      document.body.classList.remove('printing');
-    };
-    window.addEventListener('afterprint', handleAfterPrint);
-    return () => {
-      window.removeEventListener('afterprint', handleAfterPrint);
-    };
-  }, []);
 
   const handleSelectionChange = (index: number) => {
     setSelectedIndices((prev) =>
@@ -319,14 +270,149 @@ export function SlideEditor({
       }
     );
   };
-
-  const handleGeneratePdf = () => {
-    document.body.classList.add('printing');
-    setTimeout(() => {
-      window.print();
-    }, 100);
-  };
   
+  const handleExportToPdf = () => {
+    setIsModifying(true);
+    try {
+        const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+        doc.deletePage(1); // Start with a fresh slate, no initial blank page.
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 50;
+        const lineHeight = 16;
+        const titleSize = 18;
+        const bodySize = 11;
+        const contentWidth = pageWidth - margin * 2;
+
+        let y = 0; // The cursor
+        let pageIsEmpty = true;
+
+        const addPageIfNeeded = () => {
+            doc.addPage();
+            y = margin;
+            pageIsEmpty = true;
+        };
+
+        const ensureSpace = (neededHeight: number, currentTitleForHeader: string) => {
+            if (y + neededHeight > pageHeight - margin) {
+                addPageIfNeeded();
+                // Redraw header on the new page
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(titleSize);
+                doc.text(currentTitleForHeader, margin, y);
+                y += titleSize + 10;
+                doc.setFont('helvetica', 'normal');
+                pageIsEmpty = false;
+            }
+        };
+
+        slides.forEach((slide, slideIndex) => {
+            addPageIfNeeded();
+
+            // Draw slide title
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(titleSize);
+            const titleLines = doc.splitTextToSize(slide.title, contentWidth);
+            ensureSpace(titleLines.length * titleSize, slide.title);
+            doc.text(titleLines, margin, y);
+            y += titleLines.length * titleSize + 10;
+            doc.setFont('helvetica', 'normal');
+            pageIsEmpty = false;
+
+
+            // Draw content
+            slide.content.forEach(item => {
+                doc.setFontSize(bodySize);
+                
+                switch (item.type) {
+                    case 'paragraph':
+                    case 'note': {
+                        const text = item.type === 'note' ? `Note: ${item.text}` : item.text;
+                        const lines = doc.splitTextToSize(text, contentWidth);
+                        const needed = lines.length * lineHeight;
+                        ensureSpace(needed, slide.title);
+                        
+                        if (item.type === 'note') doc.setFont('helvetica', 'italic');
+                        doc.text(lines, margin, y);
+                        if (item.type === 'note') doc.setFont('helvetica', 'normal');
+
+                        y += needed;
+                        y += 10; // Gap after block
+                        pageIsEmpty = false;
+                        break;
+                    }
+
+                    case 'bullet_list':
+                    case 'numbered_list': {
+                        item.items.forEach((bulletText, index) => {
+                            const prefix = item.type === 'bullet_list' ? '•  ' : `${index + 1}.  `;
+                            const textLines = doc.splitTextToSize(bulletText, contentWidth - 15); // 15 for prefix and indent
+                            const needed = textLines.length * lineHeight + 4; // Add small gap
+                            ensureSpace(needed, slide.title);
+                            
+                            doc.text(prefix + textLines[0], margin, y);
+                            y += lineHeight;
+
+                            if (textLines.length > 1) {
+                                for (let i = 1; i < textLines.length; i++) {
+                                    doc.text(textLines[i], margin + 15, y);
+                                    y += lineHeight;
+                                }
+                            }
+                            pageIsEmpty = false;
+                        });
+                        y += 10; // Gap after list
+                        break;
+                    }
+
+                    case 'table': {
+                        const head = [item.headers];
+                        const body = item.rows.map(row => row.cells);
+                        
+                        // We need to check if the autoTable will start off the page
+                        if (y > pageHeight - margin - 40) { // 40 is a guess for min table height
+                           addPageIfNeeded();
+                           // Redraw header if needed
+                           doc.setFont('helvetica', 'bold');
+                           doc.setFontSize(titleSize);
+                           doc.text(slide.title, margin, y);
+                           y += titleSize + 10;
+                           doc.setFont('helvetica', 'normal');
+                        }
+
+                        autoTable(doc, {
+                            head,
+                            body,
+                            startY: y,
+                            theme: 'grid',
+                            styles: { fontSize: 10, cellPadding: 4 },
+                            headStyles: { fontStyle: 'bold' },
+                        });
+                        y = (doc as any).lastAutoTable.finalY + 20;
+                        pageIsEmpty = false;
+                        break;
+                    }
+                }
+            });
+        });
+
+        const docName = `${topic.replace(/\s+/g, '_') || 'document'}.pdf`;
+        doc.save(docName);
+        toast({
+          title: 'Document Downloaded',
+          description: 'Your PDF document has been downloaded locally.',
+        });
+
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        toast({ title: 'Error', description: 'Failed to generate PDF.', variant: 'destructive' });
+    } finally {
+        setIsModifying(false);
+    }
+  };
+
+
   const handleExportToWord = async () => {
     setIsModifying(true);
     
@@ -575,7 +661,7 @@ export function SlideEditor({
                 Word Document
               </Button>
               <Button
-                onClick={handleGeneratePdf}
+                onClick={handleExportToPdf}
                 disabled={isModifying || slides.length === 0}
                 className="w-full sm:w-auto"
               >
@@ -633,8 +719,6 @@ export function SlideEditor({
         </CardContent>
       </Card>
       
-      <PrintableContent slides={slides} />
-
       {selectedIndices.length > 0 && (
         <div className="sticky bottom-4 z-10 mx-auto flex w-fit flex-wrap justify-center gap-2 rounded-lg border bg-card/95 p-2 shadow-lg backdrop-blur-sm">
           <AlertDialog
