@@ -15,6 +15,7 @@ import {
   BorderStyle,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import { jsPDF } from 'jspdf';
 import {
   Card,
   CardContent,
@@ -66,7 +67,6 @@ import { Label } from './ui/label';
 interface ParagraphContent {
   type: 'paragraph';
   text: string;
-  bold?: string[];
 }
 interface BulletList {
   type: 'bullet_list';
@@ -295,6 +295,112 @@ export function SlideEditor({
     );
   };
 
+  const handleExportPdf = async () => {
+    setIsModifying(true);
+    try {
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4',
+      });
+  
+      const markdownToHtml = (text: string): string => {
+        if (!text) return '';
+        return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+      };
+  
+      let htmlString = `
+        <style>
+          body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
+          .slide { page-break-before: always; padding: 40pt; height: 550pt; }
+          .slide:first-child { page-break-before: avoid; }
+          h1 { font-size: 24pt; font-weight: bold; margin-bottom: 20pt; color: #000; }
+          p, li { margin-bottom: 8pt; line-height: 1.4; }
+          ul, ol { padding-left: 20pt; }
+          b { font-weight: bold; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 12pt; font-size: 9pt; }
+          th, td { border: 1px solid #dddddd; text-align: left; padding: 6pt; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+          .note { font-style: italic; color: #555; font-size: 9pt; }
+        </style>
+      `;
+  
+      for (const slide of slides) {
+        htmlString += `<div class="slide">`;
+        htmlString += `<h1>${slide.title}</h1>`;
+  
+        for (const item of slide.content) {
+          switch (item.type) {
+            case 'paragraph':
+              htmlString += `<p>${markdownToHtml(item.text)}</p>`;
+              break;
+            case 'bullet_list':
+              htmlString += '<ul>';
+              item.items.forEach(bullet => {
+                htmlString += `<li>${markdownToHtml(bullet)}</li>`;
+              });
+              htmlString += '</ul>';
+              break;
+            case 'numbered_list':
+              htmlString += '<ol>';
+              item.items.forEach(num_item => {
+                htmlString += `<li>${markdownToHtml(num_item)}</li>`;
+              });
+              htmlString += '</ol>';
+              break;
+            case 'note':
+              htmlString += `<p class="note">Note: ${markdownToHtml(item.text)}</p>`;
+              break;
+            case 'table':
+              htmlString += '<table>';
+              htmlString += '<thead><tr>';
+              item.headers.forEach(header => {
+                htmlString += `<th>${markdownToHtml(header)}</th>`;
+              });
+              htmlString += '</tr></thead>';
+              htmlString += '<tbody>';
+              item.rows.forEach(row => {
+                htmlString += '<tr>';
+                row.cells.forEach(cell => {
+                  htmlString += `<td>${markdownToHtml(cell)}</td>`;
+                });
+                htmlString += '</tr>';
+              });
+              htmlString += '</tbody></table>';
+              break;
+          }
+        }
+        htmlString += `</div>`;
+      }
+  
+      await doc.html(htmlString, {
+        callback: function (doc) {
+          const docName = `${topic.replace(/\s+/g, '_') || 'document'}.pdf`;
+          doc.save(docName);
+        },
+        x: 0,
+        y: 0,
+        width: doc.internal.pageSize.getWidth(),
+        windowWidth: 900 
+      });
+  
+      toast({
+        title: 'Document Downloaded',
+        description: 'Your PDF document has been downloaded locally.',
+      });
+  
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: 'An Error Occurred',
+        description: 'Failed to generate PDF document. Please check the console.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsModifying(false);
+    }
+  };
+  
   const handleExport = async () => {
     setIsModifying(true);
     
@@ -398,7 +504,9 @@ export function SlideEditor({
               const noteRuns: TextRun[] = [new TextRun({ text: 'Note: ', italic: true })];
               const contentRuns = createRunsFromMarkdown(item.text);
               contentRuns.forEach(run => {
-                run.options.italic = true;
+                if (run.options) {
+                  run.options.italic = true;
+                }
               });
               noteRuns.push(...contentRuns);
               docChildren.push(
@@ -530,7 +638,14 @@ export function SlideEditor({
                 disabled={isModifying || slides.length === 0}
               >
                 <FileDown />
-                Generate Word Document
+                Word Document
+              </Button>
+              <Button
+                onClick={handleExportPdf}
+                disabled={isModifying || slides.length === 0}
+              >
+                <FileDown />
+                PDF Document
               </Button>
             </div>
           </div>
