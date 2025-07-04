@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -30,8 +31,16 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      router.push('/');
+    }
+  }, [user, router]);
 
   const handleAuthAction = async (action: 'login' | 'signup') => {
+    if (!auth) return;
     setIsLoading(true);
     try {
       if (action === 'login') {
@@ -55,28 +64,30 @@ export default function LoginPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!auth) return;
     setIsLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithPopup(auth, provider);
-      toast({ title: 'Login Successful', description: 'Welcome!' });
-      router.push('/');
+      await signInWithRedirect(auth, provider);
+      // The user is redirected, so the loading state will be reset on page reload.
     } catch (error: any) {
-      // Don't show an error toast if the user intentionally closed the popup
-      if (error.code === 'auth/popup-closed-by-user') {
-        console.log('Google sign-in popup closed by user.');
-      } else {
-        console.error('Google sign-in failed:', error);
-        toast({
-          title: 'Google Sign-in Failed',
-          description: error.message,
-          variant: 'destructive',
-        });
-      }
-    } finally {
+      console.error('Google sign-in failed:', error);
+      toast({
+        title: 'Google Sign-in Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
       setIsLoading(false);
     }
   };
+
+  if (user) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="container flex min-h-[calc(100vh-8rem)] items-center justify-center">
