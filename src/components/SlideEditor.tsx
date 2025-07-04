@@ -276,8 +276,8 @@ export function SlideEditor({
     try {
         const doc = new jsPDF({ unit: 'pt', format: 'letter' });
         
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        let pageWidth = doc.internal.pageSize.getWidth();
+        let pageHeight = doc.internal.pageSize.getHeight();
         doc.deletePage(1); // Start with a fresh slate, no initial blank page.
         
         const margin = 50;
