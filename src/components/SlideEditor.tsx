@@ -557,7 +557,7 @@ export function SlideEditor({
           <CardDescription>
             Review, edit, and modify your content before exporting.
           </CardDescription>
-          <div className="flex flex-wrap items-center gap-2 pt-4">
+          <div className="flex flex-col gap-4 pt-4 md:flex-row md:items-end">
             <div className="flex-grow space-y-1">
               <Label
                 htmlFor="topic-refresh"
@@ -571,7 +571,7 @@ export function SlideEditor({
                 onChange={(e) => setTopic(e.target.value)}
               />
             </div>
-            <div className="flex items-end gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               <Button
                 variant="outline"
                 onClick={handleRefreshClick}
@@ -662,7 +662,7 @@ export function SlideEditor({
       </Card>
 
       {selectedIndices.length > 0 && (
-        <div className="sticky bottom-4 z-10 mx-auto flex w-fit justify-center gap-2 rounded-lg border bg-card/95 p-2 shadow-lg backdrop-blur-sm">
+        <div className="sticky bottom-4 z-10 mx-auto flex w-fit flex-wrap justify-center gap-2 rounded-lg border bg-card/95 p-2 shadow-lg backdrop-blur-sm">
           <AlertDialog
             open={isRefreshModalOpen}
             onOpenChange={setIsRefreshModalOpen}

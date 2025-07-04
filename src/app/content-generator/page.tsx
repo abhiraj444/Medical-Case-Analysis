@@ -312,7 +312,7 @@ export default function ContentGeneratorPage() {
                 </CardHeader>
                 <CardContent>
                     <Tabs value={mode} onValueChange={(value) => setMode(value as any)} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2">
                         <TabsTrigger value="question">Specific Clinical Question</TabsTrigger>
                         <TabsTrigger value="topic">General Medical Topic</TabsTrigger>
                     </TabsList>
@@ -375,7 +375,7 @@ export default function ContentGeneratorPage() {
             </Card>
         )}
 
-        {(isLoading && !result) && (
+        {isLoading && !result && (
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -389,12 +389,12 @@ export default function ContentGeneratorPage() {
         {result && (
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
+              <CardTitle className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                  <span className="flex items-center gap-2">
                     <BrainCircuit className="text-primary"/>
                     AI Response
                  </span>
-                 <Button variant="outline" onClick={handleNewCase} disabled={isLoading}>
+                 <Button variant="outline" onClick={handleNewCase} disabled={isLoading} className="w-full sm:w-auto">
                       <PlusCircle />
                       New Case
                   </Button>

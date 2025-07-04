@@ -228,14 +228,13 @@ export default function DiagnosisPage() {
                   Upload PDFs or images, or paste an image into the text area above.
                 </p>
                 {filePreviews.length > 0 && (
-                   <div className="mt-4 space-y-3 rounded-md border p-4">
-                     <p className="text-sm font-medium">Attached files:</p>
+                   <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                     {filePreviews.map((preview, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-3 text-sm text-muted-foreground"
+                        className="relative aspect-square"
                       >
-                         <img src={preview} alt={`preview ${i}`} className="h-16 w-16 object-cover rounded-md border" />
+                         <img src={preview} alt={`preview ${i}`} className="h-full w-full object-cover rounded-md border" />
                       </div>
                     ))}
                   </div>
@@ -256,7 +255,7 @@ export default function DiagnosisPage() {
         <div className="space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <div className="flex items-start justify-between">
+              <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex-grow">
                   <CardTitle className="flex items-center gap-2">
                     <Bot className="text-primary" />
@@ -267,7 +266,11 @@ export default function DiagnosisPage() {
                   </CardDescription>
                 </div>
                 {results && (
-                  <Button variant="outline" onClick={handleNewCase} className="ml-4 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={handleNewCase}
+                    className="w-full flex-shrink-0 sm:w-auto"
+                  >
                     <PlusCircle />
                     New Case
                   </Button>
