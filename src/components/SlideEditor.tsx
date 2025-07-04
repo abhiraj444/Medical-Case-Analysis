@@ -276,9 +276,8 @@ export function SlideEditor({
     try {
         const doc = new jsPDF({ unit: 'pt', format: 'letter' });
         
-        let pageWidth = doc.internal.pageSize.getWidth();
-        let pageHeight = doc.internal.pageSize.getHeight();
-        
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
         doc.deletePage(1); // Start with a fresh slate, no initial blank page.
         
         const margin = 50;
@@ -461,8 +460,6 @@ export function SlideEditor({
             });
         });
         
-        doc.deletePage(1);
-
         const docName = `${topic.replace(/\s+/g, '_') || 'document'}.pdf`;
         doc.save(docName);
         toast({

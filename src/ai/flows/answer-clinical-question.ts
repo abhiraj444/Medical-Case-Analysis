@@ -57,8 +57,8 @@ const prompt = ai.definePrompt({
   1.  "answer": A detailed, clear, and concise answer to the user's question. The first line must be the direct answer.
       - **If the question includes options** (e.g., O1, O2, A, B), identify the correct option. Then, state the answer clearly, using a simple number for the option. For example, if the correct option was originally "O4: Spironolactone", your answer must begin with "The correct answer is 4: Spironolactone.".
       - **If there are no options**, the first line should be a single, concise sentence answering the question.
-      - After the direct answer, provide a more detailed explanation that elaborates on it. Use markdown for formatting, such as **bolding** key terms.
-  2.  "reasoning": A step-by-step explanation of how you arrived at the answer. Highlight the key findings from the provided text or image. Use markdown for formatting.
+      - After the direct answer, provide a more detailed explanation that elaborates on it. Use markdown for formatting, such as **bolding** key terms. **Do not use markdown tables; use paragraphs and lists instead.**
+  2.  "reasoning": A step-by-step explanation of how you arrived at the answer. Highlight the key findings from the provided text or image. Use markdown for formatting. **Do not use markdown tables; use paragraphs and lists instead.**
   3.  "topic": A short, clear topic title suitable for a presentation based on the question. For example, if the question is about treating a specific condition, the topic could be "Treatment of [Condition]".
 `,
 });
