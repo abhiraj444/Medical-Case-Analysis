@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -102,6 +103,23 @@ interface SlideEditorProps {
   onNewCase: () => void;
 }
 
+// A simple component to render markdown-like bolding.
+const SimpleMarkdown = ({ text }: { text: string | null | undefined }) => {
+  if (!text) return null;
+  // This regex finds **text** and replaces it.
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        }
+        return part;
+      })}
+    </>
+  );
+};
+
 const renderContentItem = (item: ContentItem, index: number) => {
   const getIcon = () => {
     switch (item.type) {
@@ -114,52 +132,37 @@ const renderContentItem = (item: ContentItem, index: number) => {
     }
   };
 
-  const BoldableText = ({ text, boldWords }: { text: string; boldWords?: string[] }) => {
-    if (!boldWords || boldWords.length === 0) {
-      return <>{text}</>;
-    }
-    const regex = new RegExp(`(${boldWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
-    const parts = text.split(regex);
-    return (
-      <>
-        {parts.map((part, i) =>
-          boldWords.includes(part) ? <strong key={i}>{part}</strong> : part
-        )}
-      </>
-    );
-  };
-
   return (
     <div key={index} className="mb-2 flex items-start gap-3 rounded-md border p-3">
        <span className="text-muted-foreground pt-1">{getIcon()}</span>
        <div className='w-full'>
             {item.type === 'paragraph' && (
-                <p><BoldableText text={item.text} boldWords={item.bold} /></p>
+                <p><SimpleMarkdown text={item.text} /></p>
             )}
             {item.type === 'bullet_list' && (
                 <ul className="list-disc pl-5">
-                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                {item.items.map((bullet, i) => <li key={i}><SimpleMarkdown text={bullet} /></li>)}
                 </ul>
             )}
             {item.type === 'numbered_list' && (
                 <ol className="list-decimal pl-5">
-                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                {item.items.map((bullet, i) => <li key={i}><SimpleMarkdown text={bullet} /></li>)}
                 </ol>
             )}
             {item.type === 'note' && (
-                <p className="text-sm italic text-muted-foreground">Note: {item.text}</p>
+                <p className="text-sm italic text-muted-foreground">Note: <SimpleMarkdown text={item.text} /></p>
             )}
             {item.type === 'table' && (
                 <ShadcnTable>
                 <TableHeader>
                     <ShadcnTableRow>
-                    {item.headers.map((header, i) => <TableHead key={i}>{header}</TableHead>)}
+                    {item.headers.map((header, i) => <TableHead key={i}><SimpleMarkdown text={header} /></TableHead>)}
                     </ShadcnTableRow>
                 </TableHeader>
                 <TableBody>
                     {item.rows.map((row, i) => (
                     <ShadcnTableRow key={i}>
-                        {row.cells.map((cell, j) => <ShadcnTableCell key={j}>{cell}</ShadcnTableCell>)}
+                        {row.cells.map((cell, j) => <ShadcnTableCell key={j}><SimpleMarkdown text={cell} /></ShadcnTableCell>)}
                     </ShadcnTableRow>
                     ))}
                 </TableBody>
@@ -294,6 +297,19 @@ export function SlideEditor({
 
   const handleExport = async () => {
     setIsModifying(true);
+    
+    // Helper to create an array of TextRun objects from a string with markdown
+    const createRunsFromMarkdown = (text: string): TextRun[] => {
+        if (!text) return [new TextRun('')];
+        const parts = text.split(/(\*\*.*?\*\*)/g);
+        return parts.filter(part => part).map(part => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return new TextRun({ text: part.slice(2, -2), bold: true });
+            }
+            return new TextRun(part);
+        });
+    };
+
     try {
       const docChildren: (Paragraph | Table)[] = [];
 
@@ -309,25 +325,9 @@ export function SlideEditor({
         slide.content.forEach((item) => {
           switch (item.type) {
             case 'paragraph': {
-              const textRuns: TextRun[] = [];
-              if (item.bold && item.bold.length > 0) {
-                 const boldWordsEscaped = item.bold.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-                 const regex = new RegExp(`(${boldWordsEscaped.join('|')})`, 'g');
-                 const parts = item.text.split(regex).filter(part => part);
-
-                 parts.forEach(part => {
-                     if (item.bold?.includes(part)) {
-                         textRuns.push(new TextRun({ text: part, bold: true }));
-                     } else {
-                         textRuns.push(new TextRun(part));
-                     }
-                 });
-              } else {
-                textRuns.push(new TextRun(item.text));
-              }
               docChildren.push(
                 new Paragraph({
-                  children: textRuns.length > 0 ? textRuns : [new TextRun('')],
+                  children: createRunsFromMarkdown(item.text),
                   spacing: { after: 100 },
                 })
               );
@@ -336,14 +336,14 @@ export function SlideEditor({
             case 'bullet_list':
               item.items.forEach((bulletText) => {
                 docChildren.push(
-                  new Paragraph({ text: bulletText, bullet: { level: 0 }, spacing: { after: 50 } })
+                  new Paragraph({ children: createRunsFromMarkdown(bulletText), bullet: { level: 0 }, spacing: { after: 50 } })
                 );
               });
               break;
             case 'numbered_list':
               item.items.forEach((numberedText) => {
                 docChildren.push(
-                  new Paragraph({ text: numberedText, numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
+                  new Paragraph({ children: createRunsFromMarkdown(numberedText), numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
                 );
               });
               break;
@@ -354,7 +354,7 @@ export function SlideEditor({
                     new TableCell({
                       children: [
                         new Paragraph({
-                          children: [new TextRun({ text: header, bold: true })],
+                          children: createRunsFromMarkdown(header),
                           alignment: AlignmentType.CENTER,
                         }),
                       ],
@@ -370,7 +370,7 @@ export function SlideEditor({
                 (row) =>
                   new DocxTableRow({
                     children: row.cells.map(
-                      (cellText) => new TableCell({ children: [new Paragraph(cellText || '')] })
+                      (cellText) => new TableCell({ children: [new Paragraph({ children: createRunsFromMarkdown(cellText) })] })
                     ),
                   })
               );
@@ -395,9 +395,15 @@ export function SlideEditor({
               break;
             }
             case 'note':
+              const noteRuns: TextRun[] = [new TextRun({ text: 'Note: ', italic: true })];
+              const contentRuns = createRunsFromMarkdown(item.text);
+              contentRuns.forEach(run => {
+                run.options.italic = true;
+              });
+              noteRuns.push(...contentRuns);
               docChildren.push(
                 new Paragraph({
-                  children: [new TextRun({ text: `Note: ${item.text}`, italic: true })],
+                  children: noteRuns,
                   spacing: { after: 100 },
                 })
               );
