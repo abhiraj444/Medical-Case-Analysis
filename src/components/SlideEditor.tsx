@@ -300,13 +300,13 @@ export function SlideEditor({
     
     // Helper to create an array of TextRun objects from a string with markdown
     const createRunsFromMarkdown = (text: string): TextRun[] => {
-        if (!text) return [new TextRun('')];
+        if (!text) return [new TextRun({ text: '' })];
         const parts = text.split(/(\*\*.*?\*\*)/g);
         return parts.filter(part => part).map(part => {
             if (part.startsWith('**') && part.endsWith('**')) {
                 return new TextRun({ text: part.slice(2, -2), bold: true });
             }
-            return new TextRun(part);
+            return new TextRun({ text: part });
         });
     };
 
