@@ -306,23 +306,18 @@ export function SlideEditor({
             }
         };
 
-        const sanitize = (str: string) => str.replace(/≥/g, '>=').replace(/≤/g, '<=');
-
         const drawFormattedText = (text: string, bold: string[] | undefined, x: number, startY: number, maxWidth: number): number => {
             if (!text) return startY;
         
-            const sanitizedText = sanitize(text);
-            const sanitizedBold = bold?.map(sanitize);
-
             const parts = (() => {
-                if (!sanitizedBold || sanitizedBold.length === 0) {
-                    return [{ text: sanitizedText, isBold: false }];
+                if (!bold || bold.length === 0) {
+                    return [{ text: text, isBold: false }];
                 }
-                const boldEscaped = sanitizedBold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+                const boldEscaped = bold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
                 const regex = new RegExp(`(${boldEscaped.join('|')})`, 'g');
-                return sanitizedText.split(regex).filter(Boolean).map(part => ({
+                return text.split(regex).filter(Boolean).map(part => ({
                     text: part,
-                    isBold: sanitizedBold.includes(part),
+                    isBold: bold.includes(part),
                 }));
             })();
             
@@ -352,18 +347,15 @@ export function SlideEditor({
         const calculateFormattedTextHeight = (text: string, bold: string[] | undefined, maxWidth: number): number => {
             if (!text) return 0;
         
-            const sanitizedText = sanitize(text);
-            const sanitizedBold = bold?.map(sanitize);
-
             const parts = (() => {
-                if (!sanitizedBold || sanitizedBold.length === 0) {
-                    return [{ text: sanitizedText, isBold: false }];
+                if (!bold || bold.length === 0) {
+                    return [{ text: text, isBold: false }];
                 }
-                const boldEscaped = sanitizedBold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+                const boldEscaped = bold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
                 const regex = new RegExp(`(${boldEscaped.join('|')})`, 'g');
-                return sanitizedText.split(regex).filter(Boolean).map(part => ({
+                return text.split(regex).filter(Boolean).map(part => ({
                     text: part,
-                    isBold: sanitizedBold.includes(part),
+                    isBold: bold.includes(part),
                 }));
             })();
             
@@ -412,8 +404,7 @@ export function SlideEditor({
 
                     case 'note': {
                         const text = `Note: ${item.text.replace(/^Note:\s*/i, '')}`;
-                        const sanitizedText = sanitize(text);
-                        const lines = doc.splitTextToSize(sanitizedText, pageWidth - margin * 2);
+                        const lines = doc.splitTextToSize(text, pageWidth - margin * 2);
                         const needed = lines.length * lineHeight;
                         ensureSpace(needed, slide.title);
                         
@@ -447,8 +438,8 @@ export function SlideEditor({
                     }
 
                     case 'table': {
-                        const head = [item.headers.map(sanitize)];
-                        const body = item.rows.map(row => row.cells.map(sanitize));
+                        const head = [item.headers];
+                        const body = item.rows.map(row => row.cells);
                         
                         autoTable(doc, {
                             head,
