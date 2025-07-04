@@ -278,58 +278,139 @@ export function SlideEditor({
         
         const pageWidth = doc.internal.pageSize.getWidth();
         const pageHeight = doc.internal.pageSize.getHeight();
-        
         doc.deletePage(1); // Start with a fresh slate, no initial blank page.
-
+        
         const margin = 50;
         const lineHeight = 16;
         const titleSize = 18;
         const bodySize = 11;
 
         let y = 0; // The cursor
-        
-        const drawHeader = (title: string) => {
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(titleSize);
-          const titleLines = doc.splitTextToSize(title, pageWidth - margin * 2);
-          doc.text(titleLines, margin, y);
-          y += titleLines.length * titleSize + 10;
-          doc.setFont('helvetica', 'normal');
-        };
 
+        const drawHeader = (title: string) => {
+          doc.setFontSize(titleSize);
+          doc.setFont('helvetica', 'bold');
+          doc.text(title, margin, y);
+          doc.setFont('helvetica', 'normal');
+          y += titleSize + 10;
+        };
+        
         const ensureSpace = (neededHeight: number, currentTitle: string) => {
             if (y + neededHeight > pageHeight - margin) {
                 doc.addPage();
                 y = margin;
-                // Redraw header on the new page
                 drawHeader(currentTitle);
             }
         };
 
-        slides.forEach((slide, slideIndex) => {
+        const drawFormattedText = (text: string, bold: string[] | undefined, x: number, startY: number, maxWidth: number): number => {
+            if (!text) return startY;
+        
+            const parts = (() => {
+                if (!bold || bold.length === 0) {
+                    return [{ text, isBold: false }];
+                }
+                const boldEscaped = bold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+                const regex = new RegExp(`(${boldEscaped.join('|')})`, 'g');
+                return text.split(regex).filter(Boolean).map(part => ({
+                    text: part,
+                    isBold: bold.includes(part),
+                }));
+            })();
+            
+            let currentX = x;
+            let currentY = startY;
+        
+            parts.forEach(part => {
+                doc.setFont('helvetica', part.isBold ? 'bold' : 'normal');
+                
+                const words = part.text.split(/(\s+)/);
+        
+                words.forEach(word => {
+                    if (!word) return;
+                    const wordWidth = doc.getTextWidth(word);
+                    if (currentX + wordWidth > x + maxWidth) {
+                        currentX = x;
+                        currentY += lineHeight;
+                    }
+                    doc.text(word, currentX, currentY);
+                    currentX += wordWidth;
+                });
+            });
+            
+            return currentY;
+        };
+
+        const calculateFormattedTextHeight = (text: string, bold: string[] | undefined, maxWidth: number): number => {
+            if (!text) return 0;
+        
+            const parts = (() => {
+                if (!bold || bold.length === 0) {
+                    return [{ text, isBold: false }];
+                }
+                const boldEscaped = bold.map(b => b.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+                const regex = new RegExp(`(${boldEscaped.join('|')})`, 'g');
+                return text.split(regex).filter(Boolean).map(part => ({
+                    text: part,
+                    isBold: bold.includes(part),
+                }));
+            })();
+            
+            let lineCount = 1;
+            let currentX = 0;
+        
+            parts.forEach(part => {
+                doc.setFont('helvetica', part.isBold ? 'bold' : 'normal');
+                
+                const words = part.text.split(/(\s+)/);
+        
+                words.forEach(word => {
+                    if (!word) return;
+                    const wordWidth = doc.getTextWidth(word);
+                    if (currentX + wordWidth > maxWidth) {
+                        lineCount++;
+                        currentX = wordWidth;
+                    } else {
+                        currentX += wordWidth;
+                    }
+                });
+            });
+            
+            return lineCount * lineHeight;
+        };
+
+
+        slides.forEach((slide) => {
             doc.addPage();
             y = margin;
 
             drawHeader(slide.title);
 
-            // Draw content
             slide.content.forEach(item => {
                 doc.setFontSize(bodySize);
                 
                 switch (item.type) {
-                    case 'paragraph':
+                    case 'paragraph': {
+                        const needed = calculateFormattedTextHeight(item.text, item.bold, pageWidth - margin * 2);
+                        ensureSpace(needed, slide.title);
+                        const finalY = drawFormattedText(item.text, item.bold, margin, y, pageWidth - margin * 2);
+                        y = finalY + lineHeight;
+                        y += 10;
+                        break;
+                    }
+
                     case 'note': {
-                        const text = item.type === 'note' ? `Note: ${item.text}` : item.text;
+                        const text = `Note: ${item.text}`;
                         const lines = doc.splitTextToSize(text, pageWidth - margin * 2);
                         const needed = lines.length * lineHeight;
                         ensureSpace(needed, slide.title);
                         
-                        if (item.type === 'note') doc.setFont('helvetica', 'italic');
+                        doc.setFont('helvetica', 'italic');
                         doc.text(lines, margin, y);
-                        if (item.type === 'note') doc.setFont('helvetica', 'normal');
-
                         y += needed;
-                        y += 10; // Gap after block
+                        doc.setFont('helvetica', 'normal');
+
+                        y += 10;
                         break;
                     }
 
@@ -342,16 +423,17 @@ export function SlideEditor({
                             ensureSpace(needed, slide.title);
                             
                             doc.text(prefix + textLines[0], margin, y);
-                            y += lineHeight;
+                            let tempY = y + lineHeight;
 
                             if (textLines.length > 1) {
                                 for (let i = 1; i < textLines.length; i++) {
-                                    doc.text(textLines[i], margin + 15, y);
-                                    y += lineHeight;
+                                    doc.text(textLines[i], margin + 15, tempY);
+                                    tempY += lineHeight;
                                 }
                             }
+                            y = tempY;
                         });
-                        y += 10; // Gap after list
+                        y += 10;
                         break;
                     }
 
@@ -366,6 +448,11 @@ export function SlideEditor({
                             theme: 'grid',
                             styles: { fontSize: 10, cellPadding: 4 },
                             headStyles: { fontStyle: 'bold' },
+                            didDrawPage: (data) => {
+                                y = margin;
+                                drawHeader(slide.title);
+                                data.cursor.y = y;
+                            }
                         });
                         y = (doc as any).lastAutoTable.finalY + 20;
                         break;
@@ -373,6 +460,8 @@ export function SlideEditor({
                 }
             });
         });
+        
+        doc.deletePage(1);
 
         const docName = `${topic.replace(/\s+/g, '_') || 'document'}.pdf`;
         doc.save(docName);
