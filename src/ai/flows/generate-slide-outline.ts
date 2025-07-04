@@ -80,22 +80,22 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateSlideOutlineOutputSchema},
   prompt: `You are an expert in medical education. Your task is to generate a detailed slide outline for a presentation. The content should be technically rich, detailed, and suitable for a professional medical audience.
 
-Use all the following information to construct a comprehensive presentation. The presentation should be logically structured, starting with the user's case, followed by the direct answer, and then using the reasoning and main topic to create detailed educational slides.
+Your primary goal is to create an educational presentation about the **Main Topic**. If a **User's Question/Case** is provided, you should use it as a case study to introduce and illustrate the concepts within the broader presentation.
 
 The presentation should have approximately {{{numberOfSlides}}} slides.
 
 **Source Information:**
-- **Main Topic:** {{{topic}}}
-- **User's Question/Case:** {{#if question}}{{{question}}}{{else}}Not provided.{{/if}}
+- **Main Topic:** {{{topic}}} (This is the highest priority and the core subject of the presentation).
+- **User's Question/Case:** {{#if question}}{{{question}}}{{else}}Not provided.{{/if}} (Use this as a starting point or case study).
 - **Direct Answer:** {{#if answer}}{{{answer}}}{{else}}Not provided.{{/if}}
 - **Detailed Reasoning:** {{#if reasoning}}{{{reasoning}}}{{else}}Not provided.{{/if}}
 
 **Instructions:**
-1.  Create a title slide based on the **Main Topic**.
-2.  If a **User's Question/Case** is provided, create a slide presenting it.
-3.  If a **Direct Answer** is provided, create a slide with it.
-4.  Use the **Detailed Reasoning** and **Main Topic** to generate the remaining slides, breaking down complex concepts into digestible points.
-5.  Format the entire output as a JSON array of slide objects as specified below.
+1.  **Title Slide:** Create a title slide based on the **Main Topic**.
+2.  **Case Introduction:** If a user question is available, create one or two slides to present the case, the direct answer, and key points from the reasoning. This sets the stage.
+3.  **Main Content:** The majority of the slides should be a deep dive into the **Main Topic**. Expand on the concepts mentioned in the reasoning and provide a comprehensive educational overview. The presentation should be a thorough exploration of the topic, not just an analysis of the single case.
+4.  **Logical Flow:** Ensure the presentation flows logically from the case-specific introduction to the general topic.
+5.  **Formatting:** Format the entire output as a JSON array of slide objects as specified below.
 
 **Formatting Rules:**
 Format the entire output as a JSON array of slide objects. Each slide object must conform to the following rules:
