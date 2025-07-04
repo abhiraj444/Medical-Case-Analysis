@@ -120,7 +120,7 @@ const renderContentItem = (item: ContentItem, index: number) => {
                 </ol>
             )}
             {item.type === 'note' && (
-                <p className="text-sm italic text-muted-foreground">Note: {item.text}</p>
+                <p className="text-sm italic text-muted-foreground">Note: {item.text.replace(/^Note:\s*/i, '')}</p>
             )}
             {item.type === 'table' && (
                 <ShadcnTable>
@@ -276,8 +276,9 @@ export function SlideEditor({
     try {
         const doc = new jsPDF({ unit: 'pt', format: 'letter' });
         
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
+        let pageWidth = doc.internal.pageSize.getWidth();
+        let pageHeight = doc.internal.pageSize.getHeight();
+        
         doc.deletePage(1); // Start with a fresh slate, no initial blank page.
         
         const margin = 50;
@@ -299,6 +300,8 @@ export function SlideEditor({
             if (y + neededHeight > pageHeight - margin) {
                 doc.addPage();
                 y = margin;
+                pageWidth = doc.internal.pageSize.getWidth();
+                pageHeight = doc.internal.pageSize.getHeight();
                 drawHeader(currentTitle);
             }
         };
@@ -400,7 +403,7 @@ export function SlideEditor({
                     }
 
                     case 'note': {
-                        const text = `Note: ${item.text}`;
+                        const text = `Note: ${item.text.replace(/^Note:\s*/i, '')}`;
                         const lines = doc.splitTextToSize(text, pageWidth - margin * 2);
                         const needed = lines.length * lineHeight;
                         ensureSpace(needed, slide.title);
@@ -580,7 +583,8 @@ export function SlideEditor({
             }
             case 'note':
               const noteRuns: TextRun[] = [new TextRun({ text: 'Note: ', italic: true })];
-              const contentRuns = createTextRuns(item.text);
+              const cleanedText = item.text.replace(/^Note:\s*/i, '');
+              const contentRuns = createTextRuns(cleanedText);
               contentRuns.forEach(run => {
                 if (!run.options) {
                   run.options = {};
