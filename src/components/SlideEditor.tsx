@@ -141,9 +141,7 @@ const renderContentItem = (item: ContentItem, index: number) => {
   );
 };
 
-const PrintableContent = ({ slides, isPrinting }: { slides: Slide[], isPrinting: boolean }) => {
-    if (!isPrinting) return null;
-
+const PrintableContent = ({ slides }: { slides: Slide[] }) => {
     return (
         <div id="printable-area">
             {slides.map((slide, index) => (
@@ -203,7 +201,6 @@ export function SlideEditor({
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [topic, setTopic] = useState(initialTopic);
   const [isModifying, setIsModifying] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
   const [isRefreshModalOpen, setIsRefreshModalOpen] = useState(false);
   const { toast } = useToast();
 
@@ -314,14 +311,10 @@ export function SlideEditor({
   };
 
   const handleGeneratePdf = () => {
-    setIsPrinting(true);
-    setTimeout(() => {
-        window.print();
-        setIsPrinting(false);
-    }, 100);
+    window.print();
   };
   
-  const handleExport = async () => {
+  const handleExportToWord = async () => {
     setIsModifying(true);
     
     const createTextRuns = (text: string, bold?: string[]): TextRun[] => {
@@ -561,7 +554,7 @@ export function SlideEditor({
                 Copy Raw Content
               </Button>
               <Button
-                onClick={handleExport}
+                onClick={handleExportToWord}
                 disabled={isModifying || slides.length === 0}
                 className="w-full sm:w-auto"
               >
@@ -627,7 +620,7 @@ export function SlideEditor({
         </CardContent>
       </Card>
       
-      <PrintableContent slides={slides} isPrinting={isPrinting} />
+      <PrintableContent slides={slides} />
 
       {selectedIndices.length > 0 && (
         <div className="sticky bottom-4 z-10 mx-auto flex w-fit flex-wrap justify-center gap-2 rounded-lg border bg-card/95 p-2 shadow-lg backdrop-blur-sm">

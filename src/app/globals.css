@@ -72,34 +72,45 @@ body {
   }
 }
 
+/* Hide the printable area by default */
+#printable-area {
+    display: none;
+}
+
 @media print {
-    body, html {
-        visibility: hidden;
-    }
-    #printable-area, #printable-area * {
-        visibility: visible;
-    }
-    #printable-area {
-        position: static;
-        left: auto;
-        top: auto;
+    /* Hide everything except the printable area */
+    body > *:not(#printable-area) {
+        display: none !important;
     }
 
+    /* Make the printable area visible */
+    #printable-area {
+        display: block !important;
+    }
+    
+    /* Remove default browser headers/footers and margins */
     @page {
         size: letter;
-        margin: 0.75in;
+        margin: 0;
     }
 
+    html, body {
+        margin: 0;
+        padding: 0;
+    }
+    
     .printable-slide {
         page-break-after: always;
         break-after: page;
+        padding: 0.75in; /* Page margins */
+        box-sizing: border-box;
     }
 
     .printable-slide:last-child {
         page-break-after: avoid;
     }
 
-    /* Keep it black and white */
+    /* Ensure content is black and white */
     body, .prose, .prose *, h1, h2, h3, th, td, p, li, ul, ol {
         color: black !important;
         background-color: white !important;
