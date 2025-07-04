@@ -14,6 +14,7 @@ import type { Slide } from '@/types';
 
 const GenerateSlideOutlineInputSchema = z.object({
   topic: z.string().describe('The educational topic to generate a slide outline for.'),
+  numberOfSlides: z.string().describe('The desired number of slides, e.g., "8-10".'),
 });
 export type GenerateSlideOutlineInput = z.infer<typeof GenerateSlideOutlineInputSchema>;
 
@@ -75,6 +76,8 @@ const prompt = ai.definePrompt({
   input: {schema: GenerateSlideOutlineInputSchema},
   output: {schema: GenerateSlideOutlineOutputSchema},
   prompt: `You are an expert in medical education. Your task is to generate a detailed slide outline for a presentation on the given topic. The content should be technically rich, detailed, and suitable for a professional medical audience.
+
+The presentation should have approximately {{{numberOfSlides}}} slides.
 
 Topic: {{{topic}}}
 

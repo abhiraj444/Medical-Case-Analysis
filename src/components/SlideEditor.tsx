@@ -476,8 +476,17 @@ export function SlideEditor({
     <div className="relative">
        {isPrinting && (
         <div id="printable-area">
+          {/* Cover Slide */}
+          <div className="printable-slide title-slide">
+              <h1 className="text-4xl font-bold text-primary">{topic}</h1>
+              <p className="mt-4 text-xl text-muted-foreground">
+                  An AI-Generated Presentation by MediGen
+              </p>
+          </div>
+
+          {/* Content Slides */}
           {slides.map((slide, slideIndex) => (
-            <div key={`print-${slideIndex}`} className="printable-slide">
+            <div key={`print-${slideIndex}`} className="printable-slide content-slide">
               <h1>{slide.title}</h1>
               {slide.content.map((item, itemIndex) => {
                 const isParagraph = (content: ContentItem): content is ParagraphContent => content.type === 'paragraph';

@@ -21,6 +21,7 @@ import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'fir
 import type { StructuredQuestion } from '@/types';
 import { QuestionDisplay } from '@/components/QuestionDisplay';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 export default function ContentGeneratorPage() {
@@ -37,6 +38,7 @@ export default function ContentGeneratorPage() {
   const [structuredQuestion, setStructuredQuestion] = useState<StructuredQuestion | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
   const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
+  const [slideCount, setSlideCount] = useState('8-10');
 
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
@@ -260,7 +262,7 @@ export default function ContentGeneratorPage() {
 
     setIsLoading(true);
     try {
-      const generatedSlides = await generateSlideOutline({ topic: result.topic });
+      const generatedSlides = await generateSlideOutline({ topic: result.topic, numberOfSlides: slideCount });
       setSlides(generatedSlides);
 
       const caseRef = doc(db, 'cases', currentCaseId);
@@ -480,10 +482,25 @@ export default function ContentGeneratorPage() {
                 )}
                 
                 {!slides && (
-                    <Button onClick={handleGeneratePresentation} disabled={isLoading}>
-                        {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
-                        Generate Presentation
-                    </Button>
+                  <div className="mt-4 flex flex-col sm:flex-row items-center gap-4 rounded-lg border p-4">
+                      <div className="flex-grow space-y-2">
+                          <Label htmlFor="slide-count">Presentation Length</Label>
+                          <Select value={slideCount} onValueChange={setSlideCount}>
+                              <SelectTrigger id="slide-count" className="w-full sm:w-[180px]">
+                                  <SelectValue placeholder="Select number of slides" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="5-7">Short (5-7 Slides)</SelectItem>
+                                  <SelectItem value="8-10">Medium (8-10 Slides)</SelectItem>
+                                  <SelectItem value="11-15">Long (11-15 Slides)</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                      <Button onClick={handleGeneratePresentation} disabled={isLoading} className="w-full sm:w-auto">
+                          {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
+                          Generate Presentation
+                      </Button>
+                  </div>
                 )}
             </CardContent>
           </Card>
