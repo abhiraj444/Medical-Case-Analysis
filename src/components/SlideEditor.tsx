@@ -2,6 +2,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
   Document,
   Packer,
@@ -162,37 +164,12 @@ export function SlideEditor({
   const [topic, setTopic] = useState(initialTopic);
   const [isModifying, setIsModifying] = useState(false);
   const [isRefreshModalOpen, setIsRefreshModalOpen] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     setSlides(initialSlides);
     setSelectedIndices([]);
   }, [initialSlides]);
-
-  useEffect(() => {
-    if (isPrinting) {
-      document.body.classList.add('medigen-printing');
-      // Delay printing slightly to ensure DOM is updated with the printable content
-      setTimeout(() => {
-        window.print();
-        // The afterprint event listener will handle cleanup.
-      }, 100);
-    }
-  }, [isPrinting]);
-
-  useEffect(() => {
-    const handleAfterPrint = () => {
-      document.body.classList.remove('medigen-printing');
-      setIsPrinting(false);
-    };
-
-    window.addEventListener('afterprint', handleAfterPrint);
-
-    return () => {
-      window.removeEventListener('afterprint', handleAfterPrint);
-    };
-  }, []);
 
   const handleSelectionChange = (index: number) => {
     setSelectedIndices((prev) =>
@@ -296,7 +273,115 @@ export function SlideEditor({
   };
 
   const handleGeneratePdf = () => {
-    setIsPrinting(true);
+    setIsModifying(true);
+    try {
+      const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 72;
+      const lineHeight = 14;
+      const titleSize = 18;
+      const bodySize = 12;
+
+      let y = margin;
+
+      const drawHeader = (title: string) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(titleSize);
+        const titleLines = doc.splitTextToSize(title, pageWidth - margin * 2);
+        doc.text(titleLines, margin, y);
+        y += (titleLines.length * titleSize * 0.7) + 15;
+      };
+
+      const ensureSpace = (neededHeight: number, currentTitle: string) => {
+        if (y + neededHeight > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+          drawHeader(currentTitle);
+        }
+      };
+
+      slides.forEach((slide, i) => {
+        if (i > 0) {
+          doc.addPage();
+          y = margin;
+        } else {
+          y = margin; // First slide, just reset Y
+        }
+
+        drawHeader(slide.title);
+
+        for (const block of slide.content) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(bodySize);
+
+          if (block.type === 'paragraph' || block.type === 'note') {
+            if (block.type === 'note') doc.setFont('helvetica', 'italic');
+            
+            const textToDraw = block.type === 'note' ? `Note: ${block.text}` : block.text;
+            const lines = doc.splitTextToSize(textToDraw, pageWidth - margin * 2);
+            const needed = lines.length * lineHeight;
+            ensureSpace(needed, slide.title);
+
+            doc.text(lines, margin, y);
+            y += needed;
+            
+            if (block.type === 'note') doc.setFont('helvetica', 'normal');
+            y += 8;
+          } else if (block.type === 'bullet_list' || block.type === 'numbered_list') {
+            for (const [itemIndex, item] of block.items.entries()) {
+              const bullet = block.type === 'bullet_list' ? '• ' : `${itemIndex + 1}. `;
+              const itemLines = doc.splitTextToSize(item, pageWidth - (margin * 2) - 15);
+              const needed = itemLines.length * lineHeight;
+              ensureSpace(needed, slide.title);
+              
+              doc.text(bullet + itemLines[0], margin + 5, y);
+              y += lineHeight;
+
+              for (let k = 1; k < itemLines.length; k++) {
+                ensureSpace(lineHeight, slide.title);
+                doc.text(' '.repeat(bullet.length) + itemLines[k], margin + 5, y);
+                y += lineHeight;
+              }
+              y += 4; // small gap between items
+            }
+            y += 4;
+          } else if (block.type === 'table') {
+            autoTable(doc, {
+              head: [block.headers],
+              body: block.rows.map(r => r.cells),
+              startY: y,
+              theme: 'grid',
+              styles: { fontSize: bodySize, cellPadding: 5 },
+              headStyles: { fillColor: [220, 220, 220], textColor: 20 },
+              didDrawPage: data => {
+                y = data.cursor?.y ?? margin;
+                if (data.pageNumber !== doc.getNumberOfPages()) {
+                    drawHeader(slide.title);
+                }
+              },
+            });
+            y = (doc as any).lastAutoTable.finalY + 15;
+          }
+        }
+      });
+      
+      const docName = `${topic.replace(/\s+/g, '_') || 'document'}.pdf`;
+      doc.save(docName);
+      toast({
+        title: 'PDF Downloaded',
+        description: 'Your PDF document has been downloaded locally.',
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: 'An Error Occurred',
+        description: 'Failed to generate PDF. Please check the console.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsModifying(false);
+    }
   };
   
   const handleExport = async () => {
@@ -474,65 +559,6 @@ export function SlideEditor({
 
   return (
     <div className="relative">
-       {isPrinting && (
-        <div id="printable-area">
-          {/* Cover Slide */}
-          <div className="printable-slide title-slide">
-              <h1>{topic}</h1>
-              <p>An AI-Generated Presentation by MediGen</p>
-          </div>
-
-          {/* Content Slides */}
-          {slides.map((slide, slideIndex) => (
-            <div key={`print-${slideIndex}`} className="printable-slide content-slide">
-              <h1>{slide.title}</h1>
-              {slide.content.map((item, itemIndex) => {
-                const isParagraph = (content: ContentItem): content is ParagraphContent => content.type === 'paragraph';
-                if (isParagraph(item)) {
-                  return <p key={itemIndex}><BoldRenderer text={item.text} bold={item.bold} /></p>;
-                }
-                if (item.type === 'bullet_list') {
-                  return (
-                    <ul key={itemIndex}>
-                      {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
-                    </ul>
-                  );
-                }
-                if (item.type === 'numbered_list') {
-                  return (
-                    <ol key={itemIndex}>
-                      {item.items.map((num_item, i) => <li key={i}>{num_item}</li>)}
-                    </ol>
-                  );
-                }
-                if (item.type === 'note') {
-                  return <p key={itemIndex} className="note">Note: {item.text}</p>;
-                }
-                if (item.type === 'table') {
-                  return (
-                    <table key={itemIndex}>
-                      <thead>
-                        <tr>
-                          {item.headers.map((header, i) => <th key={i}>{header}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {item.rows.map((row, i) => (
-                          <tr key={i}>
-                            {row.cells.map((cell, j) => <td key={j}>{cell}</td>)}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  );
-                }
-                return null;
-              })}
-            </div>
-          ))}
-        </div>
-      )}
-
       <Card className="shadow-lg">
         {isModifying && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/80">
