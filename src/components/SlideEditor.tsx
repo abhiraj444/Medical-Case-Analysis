@@ -9,7 +9,7 @@ import {
   HeadingLevel,
   AlignmentType,
   Table,
-  TableRow,
+  TableRow as DocxTableRow,
   TableCell,
   BorderStyle,
 } from 'docx';
@@ -79,10 +79,13 @@ interface Note {
   type: 'note';
   text: string;
 }
+interface TableRow {
+  cells: string[];
+}
 interface TableContent {
   type: 'table';
   headers: string[];
-  rows: string[][];
+  rows: TableRow[];
 }
 export type ContentItem = ParagraphContent | BulletList | NumberedList | Note | TableContent;
 export interface Slide {
@@ -156,7 +159,7 @@ const renderContentItem = (item: ContentItem, index: number) => {
                 <TableBody>
                     {item.rows.map((row, i) => (
                     <ShadcnTableRow key={i}>
-                        {row.map((cell, j) => <ShadcnTableCell key={j}>{cell}</ShadcnTableCell>)}
+                        {row.cells.map((cell, j) => <ShadcnTableCell key={j}>{cell}</ShadcnTableCell>)}
                     </ShadcnTableRow>
                     ))}
                 </TableBody>
@@ -345,7 +348,7 @@ export function SlideEditor({
               });
               break;
             case 'table': {
-              const headerRow = new TableRow({
+              const headerRow = new DocxTableRow({
                 children: item.headers.map(
                   (header) =>
                     new TableCell({
@@ -365,8 +368,8 @@ export function SlideEditor({
 
               const bodyRows = item.rows.map(
                 (row) =>
-                  new TableRow({
-                    children: row.map(
+                  new DocxTableRow({
+                    children: row.cells.map(
                       (cellText) => new TableCell({ children: [new Paragraph(cellText || '')] })
                     ),
                   })

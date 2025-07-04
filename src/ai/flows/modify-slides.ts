@@ -31,10 +31,14 @@ const NoteSchema = z.object({
   text: z.string(),
 });
 
+const TableRowSchema = z.object({
+  cells: z.array(z.string()),
+});
+
 const TableSchema = z.object({
   type: z.enum(['table']),
   headers: z.array(z.string()),
-  rows: z.array(z.array(z.string())),
+  rows: z.array(TableRowSchema),
 });
 
 const ContentItemSchema = z.union([

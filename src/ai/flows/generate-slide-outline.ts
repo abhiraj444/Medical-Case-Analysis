@@ -38,10 +38,14 @@ const NoteSchema = z.object({
   text: z.string().describe('A short note or annotation.'),
 });
 
+const TableRowSchema = z.object({
+  cells: z.array(z.string()).describe('An array of strings representing the cells in this row.'),
+});
+
 const TableSchema = z.object({
   type: z.enum(['table']),
   headers: z.array(z.string()).describe('An array of strings for the table headers.'),
-  rows: z.array(z.array(z.string())).describe('An array of arrays, where each inner array represents a table row.'),
+  rows: z.array(TableRowSchema).describe('An array of row objects, where each object contains the cells for a table row.'),
 });
 
 const ContentItemSchema = z.union([
@@ -89,7 +93,7 @@ Supported "type" values for content items:
   - "text": The content of the note.
 - **"table"**: For tabular data.
   - "headers": An array of strings for the table column headers.
-  - "rows": An array of arrays, where each inner array contains the string values for a single row.
+  - "rows": An array of row objects. Each object has a "cells" property, which is an array of strings for that row.
 
 Example:
 [
@@ -103,7 +107,7 @@ Example:
   {
     "title": "Diagnostic Criteria",
     "content": [
-       { "type": "table", "headers": ["Criteria", "Description"], "rows": [["Criteria 1", "Details for 1"], ["Criteria 2", "Details for 2"]] }
+       { "type": "table", "headers": ["Criteria", "Description"], "rows": [{ "cells": ["Criteria 1", "Details for 1"] }, { "cells": ["Criteria 2", "Details for 2"] }] }
     ]
   }
 ]
