@@ -5,7 +5,7 @@ import type { Case } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { FileText, Download } from 'lucide-react';
+import { FileText } from 'lucide-react';
 
 interface HistoryCardProps {
   caseItem: Case;
@@ -36,14 +36,6 @@ export function HistoryCard({ caseItem }: HistoryCardProps) {
               View Case
             </Link>
           </Button>
-          {caseItem.generatedFileUrl && (
-            <Button asChild variant="default" size="sm">
-              <a href={caseItem.generatedFileUrl} target="_blank" rel="noopener noreferrer">
-                <Download className="mr-2 h-4 w-4" />
-                Download Document
-              </a>
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>

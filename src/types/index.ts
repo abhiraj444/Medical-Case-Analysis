@@ -8,7 +8,6 @@ interface BaseCase {
     userId: string;
     title: string;
     createdAt: Timestamp;
-    generatedFileUrl?: string;
 }
 
 export interface DiagnosisCase extends BaseCase {

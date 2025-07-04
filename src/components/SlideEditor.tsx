@@ -59,11 +59,6 @@ import {
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
-import { useAuth } from '@/hooks/useAuth';
-import { storage, db } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
-
 
 // Data structures for the structured JSON content
 interface ParagraphContent {
@@ -184,7 +179,6 @@ export function SlideEditor({
   const [isModifying, setIsModifying] = useState(false);
   const [isRefreshModalOpen, setIsRefreshModalOpen] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
 
   useEffect(() => {
     setSlides(initialSlides);
@@ -433,28 +427,11 @@ export function SlideEditor({
         description: 'Your Word document has been downloaded locally.',
       });
 
-      if (caseId && user) {
-        toast({ title: "Uploading document...", description: "Please wait." });
-        const storageRef = ref(storage, `users/${user.uid}/cases/${caseId}/${docName}`);
-        await uploadBytes(storageRef, blob);
-        const downloadURL = await getDownloadURL(storageRef);
-        
-        const caseDocRef = doc(db, 'cases', caseId);
-        await updateDoc(caseDocRef, {
-            generatedFileUrl: downloadURL
-        });
-
-        toast({
-            title: 'Document Saved',
-            description: 'Your document has been saved to your case history.',
-        });
-      }
-
     } catch (error) {
       console.error('Error generating docx:', error);
       toast({
         title: 'An Error Occurred',
-        description: 'Failed to generate or save Word document. Please check the console.',
+        description: 'Failed to generate Word document. Please check the console.',
         variant: 'destructive',
       });
     } finally {
