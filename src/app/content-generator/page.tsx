@@ -262,7 +262,13 @@ export default function ContentGeneratorPage() {
 
     setIsLoading(true);
     try {
-      const generatedSlides = await generateSlideOutline({ topic: result.topic, numberOfSlides: slideCount });
+      const generatedSlides = await generateSlideOutline({ 
+        topic: result.topic, 
+        numberOfSlides: slideCount,
+        question: structuredQuestion?.summary,
+        answer: result.answer,
+        reasoning: result.reasoning
+      });
       setSlides(generatedSlides);
 
       const caseRef = doc(db, 'cases', currentCaseId);

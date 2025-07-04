@@ -13,7 +13,10 @@ import {z} from 'genkit';
 import type { Slide } from '@/types';
 
 const GenerateSlideOutlineInputSchema = z.object({
-  topic: z.string().describe('The educational topic to generate a slide outline for.'),
+  topic: z.string().describe('The main topic for the presentation.'),
+  question: z.string().optional().describe("The original question or case details provided by the user."),
+  answer: z.string().optional().describe("The AI's direct answer to the question."),
+  reasoning: z.string().optional().describe("The AI's detailed reasoning for the answer."),
   numberOfSlides: z.string().describe('The desired number of slides, e.g., "8-10".'),
 });
 export type GenerateSlideOutlineInput = z.infer<typeof GenerateSlideOutlineInputSchema>;
@@ -75,12 +78,26 @@ const prompt = ai.definePrompt({
   name: 'generateSlideOutlinePrompt',
   input: {schema: GenerateSlideOutlineInputSchema},
   output: {schema: GenerateSlideOutlineOutputSchema},
-  prompt: `You are an expert in medical education. Your task is to generate a detailed slide outline for a presentation on the given topic. The content should be technically rich, detailed, and suitable for a professional medical audience.
+  prompt: `You are an expert in medical education. Your task is to generate a detailed slide outline for a presentation. The content should be technically rich, detailed, and suitable for a professional medical audience.
+
+Use all the following information to construct a comprehensive presentation. The presentation should be logically structured, starting with the user's case, followed by the direct answer, and then using the reasoning and main topic to create detailed educational slides.
 
 The presentation should have approximately {{{numberOfSlides}}} slides.
 
-Topic: {{{topic}}}
+**Source Information:**
+- **Main Topic:** {{{topic}}}
+- **User's Question/Case:** {{#if question}}{{{question}}}{{else}}Not provided.{{/if}}
+- **Direct Answer:** {{#if answer}}{{{answer}}}{{else}}Not provided.{{/if}}
+- **Detailed Reasoning:** {{#if reasoning}}{{{reasoning}}}{{else}}Not provided.{{/if}}
 
+**Instructions:**
+1.  Create a title slide based on the **Main Topic**.
+2.  If a **User's Question/Case** is provided, create a slide presenting it.
+3.  If a **Direct Answer** is provided, create a slide with it.
+4.  Use the **Detailed Reasoning** and **Main Topic** to generate the remaining slides, breaking down complex concepts into digestible points.
+5.  Format the entire output as a JSON array of slide objects as specified below.
+
+**Formatting Rules:**
 Format the entire output as a JSON array of slide objects. Each slide object must conform to the following rules:
 1.  **Slide Object**: Each slide is an object with a "title" (string) and a "content" (array of content items).
 2.  **Content Breakdown**: Deconstruct complex topics into multiple small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs; use lists to convey information concisely. For each slide, aim for a maximum of 6-8 distinct points (bullets, list items, or table rows) to ensure clarity and readability.
