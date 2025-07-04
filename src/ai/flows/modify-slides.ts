@@ -17,14 +17,19 @@ const ParagraphSchema = z.object({
   bold: z.array(z.string()).optional(),
 });
 
+const ListItemSchema = z.object({
+  text: z.string().describe('The text for a single list item.'),
+  bold: z.array(z.string()).optional().describe('An array of substrings from the text to be bolded.'),
+});
+
 const BulletListSchema = z.object({
   type: z.enum(['bullet_list']),
-  items: z.array(z.string()),
+  items: z.array(ListItemSchema),
 });
 
 const NumberedListSchema = z.object({
   type: z.enum(['numbered_list']),
-  items: z.array(z.string()),
+  items: z.array(ListItemSchema),
 });
 
 const NoteSchema = z.object({
@@ -88,7 +93,7 @@ SELECTED SLIDE INDICES:
 INSTRUCTIONS:
 - Your response MUST be a complete array of all slides (modified and unmodified) in the correct order, conforming to the JSON schema.
 - **CRITICAL**: Break down complex topics into many small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs. Aim for 6-8 distinct points per slide.
-- **Bolding**: For "paragraph" items, use the \`bold\` array to specify substrings of the \`text\` that should be bolded. **Do NOT use markdown like \`**text**\` inside any text fields.**
+- **Bolding**: For "paragraph" and list "items", use the \`bold\` array to specify substrings of the \`text\` that should be bolded. **Do NOT use markdown like \`**text**\` inside any text fields.**
 - If the action is 'expand_content':
   - Take the topics from the selected slides.
   - Generate more detailed content for these topics. This may result in creating MORE slides than were originally selected.

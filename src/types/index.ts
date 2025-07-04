@@ -1,3 +1,5 @@
+'use client';
+
 import type { Timestamp } from 'firebase/firestore';
 import type { AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
 import type { AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
@@ -8,13 +10,17 @@ export interface ParagraphContent {
     text: string;
     bold?: string[];
 }
+export interface ListItemContent {
+    text: string;
+    bold?: string[];
+}
 export interface BulletListContent {
     type: 'bullet_list';
-    items: string[];
+    items: ListItemContent[];
 }
 export interface NumberedListContent {
     type: 'numbered_list';
-    items: string[];
+    items: ListItemContent[];
 }
 export interface NoteContent {
     type: 'note';

@@ -28,14 +28,19 @@ const ParagraphSchema = z.object({
   bold: z.array(z.string()).optional().describe('An array of substrings from the text to be bolded.'),
 });
 
+const ListItemSchema = z.object({
+  text: z.string().describe('The text for a single list item.'),
+  bold: z.array(z.string()).optional().describe('An array of substrings from the text to be bolded.'),
+});
+
 const BulletListSchema = z.object({
   type: z.enum(['bullet_list']),
-  items: z.array(z.string()).describe('An array of strings, where each string is a bullet point.'),
+  items: z.array(ListItemSchema).describe('An array of bullet point objects.'),
 });
 
 const NumberedListSchema = z.object({
   type: z.enum(['numbered_list']),
-  items: z.array(z.string()).describe('An array of strings, where each string is a numbered list item.'),
+  items: z.array(ListItemSchema).describe('An array of numbered list item objects.'),
 });
 
 const NoteSchema = z.object({
@@ -102,16 +107,16 @@ Format the entire output as a JSON array of slide objects. Each slide object mus
 1.  **Slide Object**: Each slide is an object with a "title" (string) and a "content" (array of content items).
 2.  **Content Breakdown**: Deconstruct complex topics into multiple small, distinct points. Use \`bullet_list\` or \`numbered_list\` extensively. Each item in a list should be concise. Avoid long paragraphs; use lists to convey information concisely. For each slide, aim for a maximum of 6-8 distinct points (bullets, list items, or table rows) to ensure clarity and readability.
 3.  **Content Array**: The "content" array contains different types of content objects. Do NOT put too much content on a single slide; create more slides if a topic is complex. Each content item must be an object with a "type" field.
-4.  **Bolding**: For "paragraph" items, use the \`bold\` array to specify substrings of the \`text\` that should be bolded. **Do NOT use markdown like \`**text**\` inside any text fields.**
+4.  **Bolding**: For "paragraph" and list "items", use the \`bold\` array to specify substrings of the \`text\` that should be bolded. **Do NOT use markdown like \`**text**\` inside any text fields.**
 
 Supported "type" values for content items:
 - **"paragraph"**: For a block of text. This should be used sparingly.
   - "text": The full paragraph string.
   - "bold": (Optional) An array of substrings from "text" that should be formatted as bold.
 - **"bullet_list"**: For an unordered list.
-  - "items": An array of strings, where each string is a bullet point.
+  - "items": An array of list item objects. Each object must have a "text" field and can have an optional "bold" array.
 - **"numbered_list"**: For an ordered list.
-  - "items": An array of strings, where each string is a list item.
+  - "items": An array of list item objects. Each object must have a "text" field and can have an optional "bold" array.
 - **"note"**: For a brief, supplementary note.
   - "text": The content of the note.
 - **"table"**: For tabular data.
@@ -124,7 +129,7 @@ Example:
     "title": "Introduction to Condition X",
     "content": [
       { "type": "paragraph", "text": "Condition X is a chronic inflammatory disease affecting the joints.", "bold": ["Condition X", "chronic inflammatory disease"] },
-      { "type": "bullet_list", "items": ["Symptom A", "Symptom B"] }
+      { "type": "bullet_list", "items": [ { "text": "Symptom A" }, { "text": "Symptom B is more complex.", "bold": ["Symptom B"] } ] }
     ]
   },
   {

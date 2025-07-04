@@ -64,7 +64,7 @@ import {
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
-import type { Slide, ContentItem, ParagraphContent } from '@/types';
+import type { Slide, ContentItem, ParagraphContent, ListItemContent } from '@/types';
 
 
 const BoldRenderer = ({ text, bold }: { text: string; bold?: string[] }) => {
@@ -111,12 +111,12 @@ const renderContentItem = (item: ContentItem, index: number) => {
             )}
             {item.type === 'bullet_list' && (
                 <ul className="list-disc pl-5">
-                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                {item.items.map((listItem, i) => <li key={i}><BoldRenderer text={listItem.text} bold={listItem.bold} /></li>)}
                 </ul>
             )}
             {item.type === 'numbered_list' && (
                 <ol className="list-decimal pl-5">
-                {item.items.map((bullet, i) => <li key={i}>{bullet}</li>)}
+                {item.items.map((listItem, i) => <li key={i}><BoldRenderer text={listItem.text} bold={listItem.bold} /></li>)}
                 </ol>
             )}
             {item.type === 'note' && (
@@ -416,22 +416,19 @@ export function SlideEditor({
 
                     case 'bullet_list':
                     case 'numbered_list': {
-                        item.items.forEach((bulletText, index) => {
+                        item.items.forEach((listItem, index) => {
                             const prefix = item.type === 'bullet_list' ? '•  ' : `${index + 1}.  `;
-                            const textLines = doc.splitTextToSize(bulletText, pageWidth - margin * 2 - 15);
-                            const needed = textLines.length * lineHeight + 4;
-                            ensureSpace(needed, slide.title);
-                            
-                            doc.text(prefix + textLines[0], margin, y);
-                            let tempY = y + lineHeight;
+                            const prefixWidth = doc.getTextWidth(prefix);
+                            const textMaxWidth = pageWidth - (margin + prefixWidth) - margin;
 
-                            if (textLines.length > 1) {
-                                for (let i = 1; i < textLines.length; i++) {
-                                    doc.text(textLines[i], margin + 15, tempY);
-                                    tempY += lineHeight;
-                                }
-                            }
-                            y = tempY;
+                            const needed = calculateFormattedTextHeight(listItem.text, listItem.bold, textMaxWidth);
+                            ensureSpace(needed + 4, slide.title);
+
+                            doc.setFont('helvetica', 'normal');
+                            doc.text(prefix, margin, y);
+
+                            const finalY = drawFormattedText(listItem.text, listItem.bold, margin + prefixWidth, y, textMaxWidth);
+                            y = finalY + lineHeight + 4;
                         });
                         y += 10;
                         break;
@@ -521,16 +518,16 @@ export function SlideEditor({
               break;
             }
             case 'bullet_list':
-              item.items.forEach((bulletText) => {
+              item.items.forEach((listItem) => {
                 docChildren.push(
-                  new Paragraph({ text: bulletText, bullet: { level: 0 }, spacing: { after: 50 } })
+                  new Paragraph({ children: createTextRuns(listItem.text, listItem.bold), bullet: { level: 0 }, spacing: { after: 50 } })
                 );
               });
               break;
             case 'numbered_list':
-              item.items.forEach((numberedText) => {
+              item.items.forEach((listItem) => {
                 docChildren.push(
-                  new Paragraph({ text: numberedText, numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
+                  new Paragraph({ children: createTextRuns(listItem.text, listItem.bold), numbering: { reference: 'default-numbering', level: 0 }, spacing: { after: 50 } })
                 );
               });
               break;
