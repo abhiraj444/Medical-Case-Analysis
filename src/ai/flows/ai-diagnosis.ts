@@ -28,7 +28,10 @@ const DiagnosisSchema = z.object({
   diagnosis: z.string().describe('The potential diagnosis.'),
   confidenceLevel: z.number().describe('The confidence level of the diagnosis (0-1).'),
   reasoning: z.string().describe('The reasoning behind the diagnosis, including details extracted from the patient data.'),
-  missingInformation: z.array(z.string()).optional().describe('Missing information or tests needed for a more accurate diagnosis.'),
+  missingInformation: z.object({
+      information: z.array(z.string()).optional().describe('List of specific pieces of historical or symptomatic information that are missing.'),
+      tests: z.array(z.string()).optional().describe('List of recommended next-step diagnostic tests (e.g., lab work, imaging).')
+  }).optional().describe('An object containing lists of missing information and recommended tests.'),
 });
 
 const AiDiagnosisOutputSchema = z.array(DiagnosisSchema);
@@ -53,7 +56,9 @@ const prompt = ai.definePrompt({
     * Explicitly state why each piece of patient data supports or refutes this specific diagnosis.
     * Compare and contrast it with other potential diagnoses, noting why it might be more or less likely.
 4.  **Assign Confidence Level:** Based on your thorough evaluation, assign a confidence level (0.0 to 1.0) to each diagnosis, reflecting how strongly the available data supports it.
-5.  **Identify Missing Information/Next Steps:** For each diagnosis, list crucial missing information or further diagnostic tests (e.g., specific lab tests, imaging, specialist consultations) that would help confirm or rule out the diagnosis, and ideally improve the confidence level.
+5.  **Identify Missing Information & Next Steps:** For each diagnosis, categorize the crucial missing information and further diagnostic tests.
+    *   **Information:** List specific historical or symptomatic details needed (e.g., 'Duration of fever', 'Family history of autoimmune disease').
+    *   **Tests:** List specific diagnostic tests (e.g., 'ECG to check for ischemic changes', 'CBC for infection markers', 'Chest X-ray').
 
 **Patient Data Provided:**
 {{#if patientData}}
@@ -75,9 +80,14 @@ Each Diagnosis object must strictly adhere to the following schema:
   "diagnosis": "The potential diagnosis (e.g., 'Acute Myocardial Infarction', 'Pneumonia', 'Migraine')",
   "confidenceLevel": "A number between 0.0 and 1.0 representing your confidence. (e.g., 0.85, 0.50, 0.92)",
   "reasoning": "A detailed explanation of why this diagnosis is considered, directly referencing patient data and explaining the alignment or misalignment with the findings. This should include the step-by-step reasoning outlined above.",
-  "missingInformation": [
-    "List of specific additional tests or information required to confirm or rule out this diagnosis more definitively. (e.g., 'ECG to check for ischemic changes', 'CBC for infection markers')"
-  ]
+  "missingInformation": {
+    "information": [
+      "List of specific additional historical or symptomatic details required."
+    ],
+    "tests": [
+      "List of specific diagnostic tests or procedures required."
+    ]
+  }
 }
 
 Ensure the JSON output is valid and can be directly parsed. Provide at least 2-3 provisional diagnoses, even if one is highly confident.

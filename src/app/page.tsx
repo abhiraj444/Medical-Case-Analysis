@@ -242,209 +242,217 @@ export default function DiagnosisPage() {
 
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8">
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="text-primary" />
-              Patient Information
-            </CardTitle>
-            <CardDescription>
-              Provide clinical questions and patient history. You can also
-              upload or paste supporting documents.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="patient-data">
-                  Clinical Questions & Patient History
-                </Label>
-                <Textarea
-                  id="patient-data"
-                  placeholder="e.g., A 58-year-old male presents with a two-week history of persistent, dry cough... You can also paste an image from your clipboard here."
-                  className="min-h-[200px]"
-                  value={patientData}
-                  onChange={(e) => setPatientData(e.target.value)}
-                  onPaste={handlePaste}
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="documents">Supporting Documents</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="documents"
-                    type="file"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileChange}
+      <div className="space-y-8">
+        {!results && !clinicalAnswer && !isLoading && (
+          <Card className="shadow-lg max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="text-primary" />
+                Patient Information
+              </CardTitle>
+              <CardDescription>
+                Provide clinical questions and patient history. You can also
+                upload or paste supporting documents.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="patient-data">
+                    Clinical Questions & Patient History
+                  </Label>
+                  <Textarea
+                    id="patient-data"
+                    placeholder="e.g., A 58-year-old male presents with a two-week history of persistent, dry cough... You can also paste an image from your clipboard here."
+                    className="min-h-[200px]"
+                    value={patientData}
+                    onChange={(e) => setPatientData(e.target.value)}
+                    onPaste={handlePaste}
                     disabled={isLoading}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Upload PDFs or images, or paste an image into the text area above.
-                </p>
-                {filePreviews.length > 0 && (
-                   <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                    {filePreviews.map((preview, i) => (
-                      <div
-                        key={i}
-                        className="relative aspect-square"
-                      >
-                         <img src={preview} alt={`preview ${i}`} className="h-full w-full object-cover rounded-md border" />
-                      </div>
-                    ))}
+                <div className="space-y-2">
+                  <Label htmlFor="documents">Supporting Documents</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="documents"
+                      type="file"
+                      multiple
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={handleFileChange}
+                      disabled={isLoading}
+                    />
                   </div>
-                )}
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading || (!patientData.trim() && filePreviews.length === 0)}>
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="mr-2 h-4 w-4" />
-                )}
-                Analyze and Diagnose
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          {structuredQuestion && (
-            <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
-          )}
-
-          {clinicalAnswer && clinicalAnswer.answer && (
-            <Card className="shadow-lg">
-                <CardHeader>
-                    <div className="flex w-full items-start justify-between gap-4">
-                        <div className="flex-grow">
-                            <CardTitle className="flex items-center gap-2">
-                                <BrainCircuit className="text-primary"/>
-                                Direct Answer
-                            </CardTitle>
-                            <CardDescription>Topic: {clinicalAnswer.topic}</CardDescription>
+                  <p className="text-sm text-muted-foreground">
+                    Upload PDFs or images, or paste an image into the text area above.
+                  </p>
+                  {filePreviews.length > 0 && (
+                     <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                      {filePreviews.map((preview, i) => (
+                        <div
+                          key={i}
+                          className="relative aspect-square"
+                        >
+                           <img src={preview} alt={`preview ${i}`} className="h-full w-full object-cover rounded-md border" />
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => handleCopy(clinicalAnswer.answer, 'answer')} aria-label="Copy answer">
-                            <Copy className="h-4 w-4" />
-                        </Button>
+                      ))}
                     </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.answer)}}></div>
-                    {clinicalAnswer.reasoning && (
-                        <Accordion type="single" collapsible className="w-full">
-                            <AccordionItem value="item-1" className="border-b-0">
-                                <AccordionTrigger>
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
-                                        <Lightbulb className="h-4 w-4" />
-                                        Click here to see the detailed analysis
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
-                                        <div className="flex items-start justify-between">
-                                            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex-grow">
-                                                Reasoning
-                                            </h4>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleCopy(clinicalAnswer.reasoning, 'reasoning')}
-                                                className="h-8 w-8 flex-shrink-0 -mr-2 -mt-2 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900 dark:hover:text-amber-100"
-                                                aria-label="Copy reasoning"
-                                            >
-                                                <Copy className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                        <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
-                    )}
-                </CardContent>
-            </Card>
-          )}
-
-          <Card className="shadow-lg">
-            <CardHeader>
-              <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex-grow">
-                  <CardTitle className="flex items-center gap-2">
-                    <Bot className="text-primary" />
-                    AI Diagnosis Results
-                  </CardTitle>
-                  <CardDescription>
-                    Provisional diagnoses based on the provided data.
-                  </CardDescription>
+                  )}
                 </div>
-                {(results || clinicalAnswer) && (
-                  <Button
-                    variant="outline"
-                    onClick={handleNewCase}
-                    className="w-full flex-shrink-0 sm:w-auto"
-                  >
-                    <PlusCircle />
-                    New Case
-                  </Button>
+                <Button type="submit" className="w-full sm:w-auto" disabled={isLoading || (!patientData.trim() && filePreviews.length === 0)}>
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="mr-2 h-4 w-4" />
+                  )}
+                  Analyze and Diagnose
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {isLoading && !results && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span>AI is thinking...</span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+              </CardContent>
+            </Card>
+            <Card>
+               <CardHeader>
+                <Skeleton className="h-6 w-3/4" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <div className="space-y-6">
+            {structuredQuestion && (
+              <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
+            )}
+
+            {clinicalAnswer && clinicalAnswer.answer && (
+              <Card className="shadow-lg">
+                  <CardHeader>
+                      <div className="flex w-full items-start justify-between gap-4">
+                          <div className="flex-grow">
+                              <CardTitle className="flex items-center gap-2">
+                                  <BrainCircuit className="text-primary"/>
+                                  Direct Answer
+                              </CardTitle>
+                              <CardDescription>Topic: {clinicalAnswer.topic}</CardDescription>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(clinicalAnswer.answer, 'answer')} aria-label="Copy answer">
+                                <Copy className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" onClick={handleNewCase} className="w-full shrink-0 sm:w-auto">
+                                <PlusCircle />
+                                New Case
+                            </Button>
+                          </div>
+                      </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.answer)}}></div>
+                      {clinicalAnswer.reasoning && (
+                          <Accordion type="single" collapsible className="w-full">
+                              <AccordionItem value="item-1" className="border-b-0">
+                                  <AccordionTrigger>
+                                      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
+                                          <Lightbulb className="h-4 w-4" />
+                                          Click here to see the detailed analysis
+                                      </div>
+                                  </AccordionTrigger>
+                                  <AccordionContent>
+                                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
+                                          <div className="flex items-start justify-between">
+                                              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex-grow">
+                                                  Reasoning
+                                              </h4>
+                                              <Button
+                                                  variant="ghost"
+                                                  size="icon"
+                                                  onClick={() => handleCopy(clinicalAnswer.reasoning, 'reasoning')}
+                                                  className="h-8 w-8 flex-shrink-0 -mr-2 -mt-2 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900 dark:hover:text-amber-100"
+                                                  aria-label="Copy reasoning"
+                                              >
+                                                  <Copy className="h-4 w-4" />
+                                              </Button>
+                                          </div>
+                                          <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
+                                      </div>
+                                  </AccordionContent>
+                              </AccordionItem>
+                          </Accordion>
+                      )}
+                  </CardContent>
+              </Card>
+            )}
+          </div>
+          <div className="space-y-6">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <div className="flex w-full flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex-grow">
+                    <CardTitle className="flex items-center gap-2">
+                      <Bot className="text-primary" />
+                      AI Diagnosis Results
+                    </CardTitle>
+                    <CardDescription>
+                      Provisional diagnoses based on the provided data.
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+            
+            {!isLoading && results && (
+              <div className="space-y-4">
+                {results.length > 0 ? (
+                  results.map((diag, index) => (
+                    <DiagnosisCard key={index} diagnosis={diag} />
+                  ))
+                ) : (
+                  <Card>
+                    <CardContent className="p-6">
+                      <p className="text-center text-muted-foreground">
+                        No provisional diagnoses could be determined. Please provide more detailed information.
+                      </p>
+                    </CardContent>
+                  </Card>
                 )}
               </div>
-            </CardHeader>
-          </Card>
-          
-          {isLoading && !results && (
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <Skeleton className="h-6 w-3/4" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-5/6" />
-                </CardContent>
-              </Card>
-              <Card>
-                 <CardHeader>
-                  <Skeleton className="h-6 w-3/4" />
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-5/6" />
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {!isLoading && results && (
-            <div className="space-y-4">
-              {results.length > 0 ? (
-                results.map((diag, index) => (
-                  <DiagnosisCard key={index} diagnosis={diag} />
-                ))
-              ) : (
-                <Card>
+            )}
+            
+            {!isLoading && !results && structuredQuestion && !clinicalAnswer && (
+               <Card>
                   <CardContent className="p-6">
                     <p className="text-center text-muted-foreground">
-                      No provisional diagnoses could be determined. Please provide more detailed information.
+                      No results to display. Start a new case.
                     </p>
                   </CardContent>
                 </Card>
-              )}
-            </div>
-          )}
-          
-          {!isLoading && !results && !structuredQuestion && !clinicalAnswer && (
-             <Card>
-                <CardContent className="p-6">
-                  <p className="text-center text-muted-foreground">
-                    Results will appear here after analysis.
-                  </p>
-                </CardContent>
-              </Card>
-          )}
-
+            )}
+          </div>
         </div>
       </div>
     </div>
