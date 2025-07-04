@@ -54,7 +54,7 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   Based on your analysis, provide the following in JSON format:
-  1.  "answer": A detailed, clear, and concise answer to the user's question, typically 2-4 sentences long. If the user's question includes options (e.g., A, B, C, D), you MUST start your answer by stating the correct option first (e.g., "The correct answer is C.") before providing the full explanation. Use markdown for formatting, such as **bolding** key terms.
+  1.  "answer": A detailed, clear, and concise answer to the user's question. The first line must be the direct answer. If the question includes options (e.g., O1, O2, A, B), this first line MUST state the correct option clearly (e.g., "The correct answer is O2: Membranous nephropathy"). If there are no options, the first line should be a single, concise sentence answering the question. After a newline, provide a more detailed explanation that elaborates on the direct answer. Use markdown for formatting, such as **bolding** key terms.
   2.  "reasoning": A step-by-step explanation of how you arrived at the answer. Highlight the key findings from the provided text or image. Use markdown for formatting.
   3.  "topic": A short, clear topic title suitable for a presentation based on the question. For example, if the question is about treating a specific condition, the topic could be "Treatment of [Condition]".
 `,
