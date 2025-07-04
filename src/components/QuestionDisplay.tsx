@@ -9,6 +9,9 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { FileQuestion } from 'lucide-react';
@@ -76,6 +79,12 @@ export function QuestionDisplay({ summary, images }: QuestionDisplayProps) {
                     </div>
                   </DialogTrigger>
                   <DialogContent className="max-w-3xl h-auto p-2">
+                    <DialogHeader className="sr-only">
+                      <DialogTitle>Submitted Image {index + 1}</DialogTitle>
+                      <DialogDescription>
+                        A full-size view of the image submitted by the user.
+                      </DialogDescription>
+                    </DialogHeader>
                     <img
                       src={img}
                       alt={`Submitted image ${index + 1}`}
