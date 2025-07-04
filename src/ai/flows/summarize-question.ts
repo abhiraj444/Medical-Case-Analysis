@@ -41,10 +41,9 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert at processing and summarizing medical information for presentation. Your task is to take the user's raw input (which could be text, images, or both) and create a single, clear, well-structured summary.
 
 Follow these rules:
-- If ONLY text is provided, rephrase and format it for maximum clarity. Use markdown for lists, bolding, and structure. Present it as a summary of the user's query.
-- If ONLY images are provided, analyze the images and describe the key visual findings in text form. This description will be the summary.
-- If BOTH text and images are provided, create a unified summary that incorporates the information from the text and references the key visual findings from the images.
-- The summary should be concise and easy to read. Use markdown formatting like **bolding** for emphasis on important medical terms or findings.
+- **Present the user's text verbatim.** Do not rephrase or alter the content. You may apply markdown formatting like lists and bolding for readability, but the original wording must be preserved.
+- If ONLY images are provided, analyze the images and describe the key visual findings in text form.
+- If BOTH text and images are provided, present the verbatim user text first, followed by an analysis of the key findings from the images.
 - Do NOT add any new medical interpretation or diagnosis. Your only job is to present the user's original query in a more structured and "eye-pleasing" way.
 
 **User Input:**
