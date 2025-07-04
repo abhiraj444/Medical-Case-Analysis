@@ -13,13 +13,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
-import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Lightbulb, Copy, FileDown } from 'lucide-react';
+import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Copy, FileDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { StructuredQuestion } from '@/types';
-import { QuestionDisplay } from '@/components/QuestionDisplay';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function DiagnosisPage() {
   const [patientData, setPatientData] = useState('');
@@ -56,16 +56,8 @@ export default function DiagnosisPage() {
             setFilePreviews(caseData.inputData.supportingDocuments || []);
             setFiles([]); // Can't restore File objects, but previews are shown
             setStructuredQuestion(caseData.inputData.structuredQuestion || null);
-            
-            // Handle old and new data structures for backward compatibility
-            if (Array.isArray(caseData.outputData)) {
-              setResults(caseData.outputData);
-              setClinicalAnswer(null);
-            } else {
-              setResults(caseData.outputData.diagnoses);
-              setClinicalAnswer(caseData.outputData.clinicalAnswer || null);
-            }
-
+            setResults(caseData.outputData.diagnoses);
+            setClinicalAnswer(caseData.outputData.clinicalAnswer || null);
             setCurrentCaseId(caseId);
             toast({ title: "Case Loaded", description: `Successfully loaded case: ${caseData.title}` });
           } else {
@@ -87,6 +79,8 @@ export default function DiagnosisPage() {
   useEffect(() => {
     const afterPrint = () => {
         document.body.classList.remove('printing-answer');
+        const printArea = document.getElementById('printable-answer-area');
+        if(printArea) printArea.innerHTML = '';
     };
     window.addEventListener('afterprint', afterPrint);
     return () => {
@@ -170,7 +164,7 @@ export default function DiagnosisPage() {
       
       setResults(diagnosisResults);
       setClinicalAnswer(answerResponse);
-      const newStructuredQuestion = { summary: summaryResponse.summary, images: supportingDocuments };
+      const newStructuredQuestion = { summary: summaryResponse.summary, images: filePreviews };
       setStructuredQuestion(newStructuredQuestion);
       
       const title = diagnosisResults[0]?.diagnosis || answerResponse?.topic || 'New Diagnosis Case';
@@ -181,7 +175,7 @@ export default function DiagnosisPage() {
         createdAt: serverTimestamp(),
         inputData: {
           patientData: patientData.trim() || null,
-          supportingDocuments: supportingDocuments,
+          supportingDocuments: filePreviews,
           structuredQuestion: newStructuredQuestion,
         },
         outputData: {
@@ -225,8 +219,7 @@ export default function DiagnosisPage() {
   };
 
   const handleCopy = (textToCopy: string, type: string) => {
-    const plainText = textToCopy.replace(/\*\*/g, '');
-    navigator.clipboard.writeText(plainText).then(
+    navigator.clipboard.writeText(textToCopy).then(
       () => {
         toast({ title: 'Copied to clipboard', description: `The ${type} has been copied.` });
       },
@@ -238,16 +231,20 @@ export default function DiagnosisPage() {
   };
 
   const handlePrintAnswer = () => {
-    if (!clinicalAnswer) return;
-    document.body.classList.add('printing-answer');
-    setTimeout(() => {
-        window.print();
-    }, 100);
-  };
-
-  const formatText = (text: string) => {
-    if (!text) return '';
-    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
+    if (!clinicalAnswer?.markdown) return;
+    const printArea = document.getElementById('printable-answer-area');
+    if (printArea) {
+        printArea.innerHTML = `
+          <div class="prose prose-sm lg:prose-base">
+            <h1>${clinicalAnswer.topic}</h1>
+            ${new (require('marked').Marked)().parse(clinicalAnswer.markdown)}
+          </div>
+        `;
+        document.body.classList.add('printing-answer');
+        setTimeout(() => {
+            window.print();
+        }, 100);
+    }
   };
 
   if (authLoading || (!user && !searchParams.get('caseId'))) {
@@ -364,10 +361,22 @@ export default function DiagnosisPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <div className="space-y-6">
             {structuredQuestion && (
-              <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
+              <Card className="shadow-lg mb-6">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                    <FileText className="text-primary" />
+                    Your Question
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {structuredQuestion.summary}
+                    </ReactMarkdown>
+                </CardContent>
+             </Card>
             )}
 
-            {clinicalAnswer && clinicalAnswer.answer && (
+            {clinicalAnswer && clinicalAnswer.markdown && (
               <Card className="shadow-lg">
                   <CardHeader>
                       <div className="flex w-full items-start justify-between gap-4">
@@ -379,7 +388,7 @@ export default function DiagnosisPage() {
                               <CardDescription>Topic: {clinicalAnswer.topic}</CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(clinicalAnswer.answer, 'answer')} aria-label="Copy answer">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(clinicalAnswer.markdown, 'answer')} aria-label="Copy answer">
                                 <Copy className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrintAnswer} disabled={!clinicalAnswer} aria-label="Download Answer PDF">
@@ -393,38 +402,9 @@ export default function DiagnosisPage() {
                       </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.answer)}}></div>
-                      {clinicalAnswer.reasoning && (
-                          <Accordion type="single" collapsible className="w-full">
-                              <AccordionItem value="item-1" className="border-b-0">
-                                  <AccordionTrigger>
-                                      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
-                                          <Lightbulb className="h-4 w-4" />
-                                          Click here to see the detailed analysis
-                                      </div>
-                                  </AccordionTrigger>
-                                  <AccordionContent>
-                                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
-                                          <div className="flex items-start justify-between">
-                                              <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex-grow">
-                                                  Reasoning
-                                              </h4>
-                                              <Button
-                                                  variant="ghost"
-                                                  size="icon"
-                                                  onClick={() => handleCopy(clinicalAnswer.reasoning, 'reasoning')}
-                                                  className="h-8 w-8 flex-shrink-0 -mr-2 -mt-2 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900 dark:hover:text-amber-100"
-                                                  aria-label="Copy reasoning"
-                                              >
-                                                  <Copy className="h-4 w-4" />
-                                              </Button>
-                                          </div>
-                                          <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
-                                      </div>
-                                  </AccordionContent>
-                              </AccordionItem>
-                          </Accordion>
-                      )}
+                    <div className="prose prose-sm max-w-none dark:prose-invert rounded-md border p-4 bg-muted/20">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{clinicalAnswer.markdown}</ReactMarkdown>
+                    </div>
                   </CardContent>
               </Card>
             )}
@@ -476,21 +456,7 @@ export default function DiagnosisPage() {
           </div>
         </div>
       </div>
-      <div id="printable-answer-area">
-        {clinicalAnswer && (
-            <>
-                <h2>{clinicalAnswer.topic}</h2>
-                <h3>Answer</h3>
-                <div dangerouslySetInnerHTML={{ __html: formatText(clinicalAnswer.answer) }} />
-                {clinicalAnswer.reasoning && (
-                    <>
-                        <h3>Reasoning</h3>
-                        <div dangerouslySetInnerHTML={{ __html: formatText(clinicalAnswer.reasoning) }} />
-                    </>
-                )}
-            </>
-        )}
-    </div>
+      <div id="printable-answer-area" className="hidden"></div>
     </div>
   );
 }

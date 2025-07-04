@@ -2,48 +2,25 @@
 
 import type { Timestamp } from 'firebase/firestore';
 import type { AiDiagnosisOutput } from '@/ai/flows/ai-diagnosis';
-import type { AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
+import type { AnswerClinicalQuestionOutput as BaseAnswerOutput } from '@/ai/flows/answer-clinical-question';
 
-// For structured slide content
-export interface ParagraphContent {
-    type: 'paragraph';
-    text: string;
-    bold?: string[];
-}
-export interface ListItemContent {
-    text: string;
-    bold?: string[];
-}
-export interface BulletListContent {
-    type: 'bullet_list';
-    items: ListItemContent[];
-}
-export interface NumberedListContent {
-    type: 'numbered_list';
-    items: ListItemContent[];
-}
-export interface NoteContent {
-    type: 'note';
-    text: string;
-}
-export interface TableRowContent {
-    cells: string[];
-}
-export interface TableContent {
-    type: 'table';
-    headers: string[];
-    rows: TableRowContent[];
-}
-export type ContentItem = ParagraphContent | BulletListContent | NumberedListContent | NoteContent | TableContent;
-
-export interface Slide {
-    title: string;
-    content: ContentItem[];
-}
+export type AnswerClinicalQuestionOutput = BaseAnswerOutput;
 
 export interface StructuredQuestion {
     summary: string;
     images: string[];
+}
+
+export interface Slide {
+    title: string;
+    content: {
+      type: string;
+      content?: string;
+      items?: string[];
+      headers?: string[];
+      rows?: string[][];
+    }[];
+    notes?: string;
 }
 
 interface BaseCase {

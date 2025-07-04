@@ -12,17 +12,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle, Copy, FileDown } from 'lucide-react';
+import { Loader2, Wand2, FileText, Bot, BrainCircuit, PlusCircle, Copy, FileDown, RefreshCw } from 'lucide-react';
 import { SlideEditor } from '@/components/SlideEditor';
-import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
-import type { StructuredQuestion } from '@/types';
-import { QuestionDisplay } from '@/components/QuestionDisplay';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import type { StructuredQuestion, Slide } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function ContentGeneratorPage() {
   const [mode, setMode] = useState<'question' | 'topic'>('question');
@@ -34,6 +32,7 @@ export default function ContentGeneratorPage() {
   const [topic, setTopic] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [result, setResult] = useState<AnswerClinicalQuestionOutput | null>(null);
   const [structuredQuestion, setStructuredQuestion] = useState<StructuredQuestion | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
@@ -68,7 +67,7 @@ export default function ContentGeneratorPage() {
             setTopic(caseData.inputData.topic || '');
             setStructuredQuestion(caseData.inputData.structuredQuestion || null);
             setResult(caseData.outputData.result);
-            setSlides(caseData.outputData.slides);
+            setSlides(caseData.outputData.slides || null);
             setCurrentCaseId(caseId);
             toast({ title: "Case Loaded", description: `Successfully loaded case: ${caseData.title}` });
           } else {
@@ -90,6 +89,8 @@ export default function ContentGeneratorPage() {
   useEffect(() => {
     const afterPrint = () => {
         document.body.classList.remove('printing-answer');
+        const printArea = document.getElementById('printable-answer-area');
+        if(printArea) printArea.innerHTML = '';
     };
     window.addEventListener('afterprint', afterPrint);
     return () => {
@@ -160,7 +161,7 @@ export default function ContentGeneratorPage() {
       ]);
 
       setResult(response);
-      const newStructuredQuestion = { summary: summaryResponse.summary, images: images };
+      const newStructuredQuestion = { summary: summaryResponse.summary, images: imagePreviews };
       setStructuredQuestion(newStructuredQuestion);
 
       const caseData = {
@@ -171,7 +172,7 @@ export default function ContentGeneratorPage() {
           inputData: {
               mode: 'question' as const,
               question: question.trim() || null,
-              images: images.length > 0 ? images : null,
+              images: imagePreviews.length > 0 ? imagePreviews : null,
               topic: null,
               structuredQuestion: newStructuredQuestion,
           },
@@ -216,8 +217,7 @@ export default function ContentGeneratorPage() {
 
     try {
       const summaryResult = {
-          answer: `This is a general overview for the topic: **${topic}**. You can now generate a presentation outline based on this.`,
-          reasoning: '',
+          markdown: `## Topic Overview: ${topic}\n\nThis is a general overview for the topic: **${topic}**. You can now generate a presentation outline based on this.`,
           topic: topic,
       };
       setResult(summaryResult);
@@ -272,12 +272,11 @@ export default function ContentGeneratorPage() {
 
     setIsLoading(true);
     try {
-      const generatedSlides = await generateSlideOutline({ 
+      const { slides: generatedSlides } = await generateSlideOutline({ 
         topic: result.topic, 
         numberOfSlides: slideCount,
         question: structuredQuestion?.summary,
-        answer: result.answer,
-        reasoning: result.reasoning
+        answerAndReasoning: result.markdown
       });
       setSlides(generatedSlides);
 
@@ -299,6 +298,12 @@ export default function ContentGeneratorPage() {
     }
   };
 
+  const handleRegeneratePresentation = async () => {
+    setIsRegenerating(true);
+    await handleGeneratePresentation();
+    setIsRegenerating(false);
+  }
+
   const handleNewCase = () => {
     setMode('question');
     setQuestion('');
@@ -316,8 +321,7 @@ export default function ContentGeneratorPage() {
   const isTopicSubmitDisabled = !topic.trim();
 
   const handleCopy = (textToCopy: string, type: string) => {
-    const plainText = textToCopy.replace(/\*\*/g, '');
-    navigator.clipboard.writeText(plainText).then(
+    navigator.clipboard.writeText(textToCopy).then(
       () => {
         toast({ title: 'Copied to clipboard', description: `The ${type} has been copied.` });
       },
@@ -327,18 +331,22 @@ export default function ContentGeneratorPage() {
       }
     );
   };
-
-  const formatText = (text: string) => {
-    if (!text) return '';
-    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
-  };
   
   const handlePrintAnswer = () => {
-    if (!result) return;
-    document.body.classList.add('printing-answer');
-    setTimeout(() => {
-        window.print();
-    }, 100);
+    if (!result?.markdown) return;
+    const printArea = document.getElementById('printable-answer-area');
+    if (printArea) {
+        printArea.innerHTML = `
+          <div class="prose prose-sm lg:prose-base">
+            <h1>${result.topic}</h1>
+            ${new (require('marked').Marked)().parse(result.markdown)}
+          </div>
+        `;
+        document.body.classList.add('printing-answer');
+        setTimeout(() => {
+            window.print();
+        }, 100);
+    }
   };
   
   if (authLoading || (!user && !searchParams.get('caseId'))) {
@@ -445,7 +453,19 @@ export default function ContentGeneratorPage() {
         )}
         
         {structuredQuestion && (
-            <QuestionDisplay summary={structuredQuestion.summary} images={structuredQuestion.images} />
+             <Card className="shadow-lg mb-6">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                    <FileText className="text-primary" />
+                    Your Question
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {structuredQuestion.summary}
+                    </ReactMarkdown>
+                </CardContent>
+            </Card>
         )}
 
         {result && (
@@ -460,7 +480,7 @@ export default function ContentGeneratorPage() {
                   <CardDescription>Topic: {result.topic}</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(result.answer, 'answer')} aria-label="Copy answer">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(result.markdown, 'response')} aria-label="Copy response">
                       <Copy className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrintAnswer} disabled={!result} aria-label="Download Answer PDF">
@@ -474,39 +494,9 @@ export default function ContentGeneratorPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-               <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(result.answer)}}></div>
-
-                {result.reasoning && (
-                    <Accordion type="single" collapsible className="w-full">
-                        <AccordionItem value="item-1" className="border-b-0">
-                            <AccordionTrigger>
-                                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
-                                    <Lightbulb className="h-4 w-4" />
-                                    Click here to see the detailed analysis
-                                </div>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                                <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
-                                    <div className="flex items-start justify-between">
-                                        <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex-grow">
-                                            Reasoning
-                                        </h4>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => handleCopy(result.reasoning, 'reasoning')}
-                                            className="h-8 w-8 flex-shrink-0 -mr-2 -mt-2 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900 dark:hover:text-amber-100"
-                                            aria-label="Copy reasoning"
-                                        >
-                                            <Copy className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                    <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(result.reasoning)}}></div>
-                                </div>
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                )}
+               <div className="prose prose-sm max-w-none dark:prose-invert rounded-md border p-4 bg-muted/20">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.markdown}</ReactMarkdown>
+               </div>
                 
                 {!slides && (
                   <div className="mt-4 flex flex-col sm:flex-row items-center gap-4 rounded-lg border p-4">
@@ -523,8 +513,8 @@ export default function ContentGeneratorPage() {
                               </SelectContent>
                           </Select>
                       </div>
-                      <Button onClick={handleGeneratePresentation} disabled={isLoading} className="w-full sm:w-auto">
-                          {isLoading ? <Loader2 className="animate-spin"/> : <Wand2 />}
+                      <Button onClick={handleGeneratePresentation} disabled={isLoading || isRegenerating} className="w-full sm:w-auto">
+                          {isLoading || isRegenerating ? <Loader2 className="animate-spin"/> : <Wand2 />}
                           Generate Presentation
                       </Button>
                   </div>
@@ -535,11 +525,9 @@ export default function ContentGeneratorPage() {
 
         {slides && result && (
             <SlideEditor
-                key={result.topic}
+                key={currentCaseId || result.topic}
                 initialSlides={slides}
                 topic={result.topic}
-                caseId={currentCaseId}
-                onRefresh={handleGeneratePresentation}
                 onSlidesUpdate={(updatedSlides) => {
                     setSlides(updatedSlides);
                     if (currentCaseId) {
@@ -548,24 +536,11 @@ export default function ContentGeneratorPage() {
                     }
                 }}
                 onNewCase={handleNewCase}
+                onRegenerate={handleRegeneratePresentation}
             />
         )}
       </div>
-      <div id="printable-answer-area">
-        {result && (
-            <>
-                <h2>{result.topic}</h2>
-                <h3>Answer</h3>
-                <div dangerouslySetInnerHTML={{ __html: formatText(result.answer) }} />
-                {result.reasoning && (
-                    <>
-                        <h3>Reasoning</h3>
-                        <div dangerouslySetInnerHTML={{ __html: formatText(result.reasoning) }} />
-                    </>
-                )}
-            </>
-        )}
-    </div>
+      <div id="printable-answer-area" className="hidden"></div>
     </div>
   );
 }

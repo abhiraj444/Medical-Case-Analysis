@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 import Header from '@/components/Header';
 import { cn } from '@/lib/utils';
 import { AuthProvider } from '@/context/AuthContext';
+import { TailwindIndicator } from '@/components/tailwind-indicator';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
