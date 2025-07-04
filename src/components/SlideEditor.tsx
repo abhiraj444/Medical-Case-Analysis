@@ -15,7 +15,6 @@ import {
   BorderStyle,
 } from 'docx';
 import { saveAs } from 'file-saver';
-import { jsPDF } from 'jspdf';
 import {
   Card,
   CardContent,
@@ -187,12 +186,36 @@ export function SlideEditor({
   const [topic, setTopic] = useState(initialTopic);
   const [isModifying, setIsModifying] = useState(false);
   const [isRefreshModalOpen, setIsRefreshModalOpen] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     setSlides(initialSlides);
     setSelectedIndices([]);
   }, [initialSlides]);
+
+  useEffect(() => {
+    if (isPrinting) {
+      document.body.classList.add('printing');
+      // Delay printing slightly to ensure DOM is updated with the printable content
+      setTimeout(() => {
+        window.print();
+      }, 100);
+    }
+  }, [isPrinting]);
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      document.body.classList.remove('printing');
+      setIsPrinting(false);
+    };
+
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
 
   const handleSelectionChange = (index: number) => {
     setSelectedIndices((prev) =>
@@ -295,116 +318,13 @@ export function SlideEditor({
     );
   };
 
-  const handleExportPdf = async () => {
-    setIsModifying(true);
-    try {
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'pt',
-        format: 'a4',
-      });
-  
-      const markdownToHtml = (text: string): string => {
-        if (!text) return '';
-        return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-      };
-  
-      let htmlString = `
-        <style>
-          body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
-          .slide { page-break-before: always; padding: 40pt; height: 550pt; }
-          .slide:first-child { page-break-before: avoid; }
-          h1 { font-size: 24pt; font-weight: bold; margin-bottom: 20pt; color: #000; }
-          p, li { margin-bottom: 8pt; line-height: 1.4; }
-          ul, ol { padding-left: 20pt; }
-          b { font-weight: bold; }
-          table { border-collapse: collapse; width: 100%; margin-bottom: 12pt; font-size: 9pt; }
-          th, td { border: 1px solid #dddddd; text-align: left; padding: 6pt; }
-          th { background-color: #f2f2f2; font-weight: bold; }
-          .note { font-style: italic; color: #555; font-size: 9pt; }
-        </style>
-      `;
-  
-      for (const slide of slides) {
-        htmlString += `<div class="slide">`;
-        htmlString += `<h1>${slide.title}</h1>`;
-  
-        for (const item of slide.content) {
-          switch (item.type) {
-            case 'paragraph':
-              htmlString += `<p>${markdownToHtml(item.text)}</p>`;
-              break;
-            case 'bullet_list':
-              htmlString += '<ul>';
-              item.items.forEach(bullet => {
-                htmlString += `<li>${markdownToHtml(bullet)}</li>`;
-              });
-              htmlString += '</ul>';
-              break;
-            case 'numbered_list':
-              htmlString += '<ol>';
-              item.items.forEach(num_item => {
-                htmlString += `<li>${markdownToHtml(num_item)}</li>`;
-              });
-              htmlString += '</ol>';
-              break;
-            case 'note':
-              htmlString += `<p class="note">Note: ${markdownToHtml(item.text)}</p>`;
-              break;
-            case 'table':
-              htmlString += '<table>';
-              htmlString += '<thead><tr>';
-              item.headers.forEach(header => {
-                htmlString += `<th>${markdownToHtml(header)}</th>`;
-              });
-              htmlString += '</tr></thead>';
-              htmlString += '<tbody>';
-              item.rows.forEach(row => {
-                htmlString += '<tr>';
-                row.cells.forEach(cell => {
-                  htmlString += `<td>${markdownToHtml(cell)}</td>`;
-                });
-                htmlString += '</tr>';
-              });
-              htmlString += '</tbody></table>';
-              break;
-          }
-        }
-        htmlString += `</div>`;
-      }
-  
-      await doc.html(htmlString, {
-        callback: function (doc) {
-          const docName = `${topic.replace(/\s+/g, '_') || 'document'}.pdf`;
-          doc.save(docName);
-        },
-        x: 0,
-        y: 0,
-        width: doc.internal.pageSize.getWidth(),
-        windowWidth: 900 
-      });
-  
-      toast({
-        title: 'Document Downloaded',
-        description: 'Your PDF document has been downloaded locally.',
-      });
-  
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toast({
-        title: 'An Error Occurred',
-        description: 'Failed to generate PDF document. Please check the console.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsModifying(false);
-    }
+  const handleGeneratePdf = () => {
+    setIsPrinting(true);
   };
   
   const handleExport = async () => {
     setIsModifying(true);
     
-    // Helper to create an array of TextRun objects from a string with markdown
     const createRunsFromMarkdown = (text: string): TextRun[] => {
         if (!text) return [new TextRun({ text: '' })];
         const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -504,9 +424,11 @@ export function SlideEditor({
               const noteRuns: TextRun[] = [new TextRun({ text: 'Note: ', italic: true })];
               const contentRuns = createRunsFromMarkdown(item.text);
               contentRuns.forEach(run => {
-                if (run.options) {
-                  run.options.italic = true;
+                // Ensure options object exists before setting italic property
+                if (!run.options) {
+                  run.options = {};
                 }
+                run.options.italic = true;
               });
               noteRuns.push(...contentRuns);
               docChildren.push(
@@ -572,6 +494,55 @@ export function SlideEditor({
 
   return (
     <div className="relative">
+       {isPrinting && (
+        <div id="printable-area">
+          {slides.map((slide, slideIndex) => (
+            <div key={`print-${slideIndex}`} className="printable-slide">
+              <h1>{slide.title}</h1>
+              {slide.content.map((item, itemIndex) => {
+                switch (item.type) {
+                  case 'paragraph':
+                    return <p key={itemIndex}><SimpleMarkdown text={item.text} /></p>;
+                  case 'bullet_list':
+                    return (
+                      <ul key={itemIndex} className="list-disc pl-5">
+                        {item.items.map((bullet, i) => <li key={i}><SimpleMarkdown text={bullet} /></li>)}
+                      </ul>
+                    );
+                  case 'numbered_list':
+                    return (
+                      <ol key={itemIndex} className="list-decimal pl-5">
+                        {item.items.map((num_item, i) => <li key={i}><SimpleMarkdown text={num_item} /></li>)}
+                      </ol>
+                    );
+                  case 'note':
+                    return <p key={itemIndex} className="note">Note: <SimpleMarkdown text={item.text} /></p>;
+                  case 'table':
+                    return (
+                      <table key={itemIndex}>
+                        <thead>
+                          <tr>
+                            {item.headers.map((header, i) => <th key={i}><SimpleMarkdown text={header} /></th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {item.rows.map((row, i) => (
+                            <tr key={i}>
+                              {row.cells.map((cell, j) => <td key={j}><SimpleMarkdown text={cell} /></td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    );
+                  default:
+                    return null;
+                }
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
       <Card className="shadow-lg">
         {isModifying && (
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-background/80">
@@ -641,7 +612,7 @@ export function SlideEditor({
                 Word Document
               </Button>
               <Button
-                onClick={handleExportPdf}
+                onClick={handleGeneratePdf}
                 disabled={isModifying || slides.length === 0}
               >
                 <FileDown />
