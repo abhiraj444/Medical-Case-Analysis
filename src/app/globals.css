@@ -71,3 +71,48 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+    body, html {
+        visibility: hidden;
+    }
+    #printable-area, #printable-area * {
+        visibility: visible;
+    }
+    #printable-area {
+        position: static;
+        left: auto;
+        top: auto;
+    }
+
+    @page {
+        size: letter;
+        margin: 0.75in;
+    }
+
+    .printable-slide {
+        page-break-after: always;
+        break-after: page;
+    }
+
+    .printable-slide:last-child {
+        page-break-after: avoid;
+    }
+
+    /* Keep it black and white */
+    body, .prose, .prose *, h1, h2, h3, th, td, p, li, ul, ol {
+        color: black !important;
+        background-color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+    }
+}
