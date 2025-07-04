@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle } from 'lucide-react';
+import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle, Copy } from 'lucide-react';
 import { SlideEditor } from '@/components/SlideEditor';
 import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
@@ -297,6 +297,19 @@ export default function ContentGeneratorPage() {
   const isQuestionSubmitDisabled = !question.trim() && imageFiles.length === 0;
   const isTopicSubmitDisabled = !topic.trim();
 
+  const handleCopy = (textToCopy: string, type: string) => {
+    const plainText = textToCopy.replace(/\*\*/g, '');
+    navigator.clipboard.writeText(plainText).then(
+      () => {
+        toast({ title: 'Copied to clipboard', description: `The ${type} has been copied.` });
+      },
+      (err) => {
+        toast({ title: 'Error', description: 'Failed to copy text.', variant: 'destructive' });
+        console.error('Could not copy text: ', err);
+      }
+    );
+  };
+
   const formatText = (text: string) => {
     if (!text) return '';
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
@@ -411,18 +424,25 @@ export default function ContentGeneratorPage() {
 
         {result && (
           <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-                 <span className="flex items-center gap-2">
-                    <BrainCircuit className="text-primary"/>
-                    AI Response
-                 </span>
-                 <Button variant="outline" onClick={handleNewCase} disabled={isLoading} className="w-full sm:w-auto">
+             <CardHeader>
+              <div className="flex w-full items-start justify-between gap-4">
+                <div className="flex-grow">
+                  <CardTitle className="flex items-center gap-2">
+                      <BrainCircuit className="text-primary"/>
+                      AI Response
+                  </CardTitle>
+                  <CardDescription>Topic: {result.topic}</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(result.answer, 'answer')} aria-label="Copy answer">
+                      <Copy className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" onClick={handleNewCase} disabled={isLoading} className="w-full shrink-0 sm:w-auto">
                       <PlusCircle />
                       New Case
                   </Button>
-              </CardTitle>
-              <CardDescription>Topic: {result.topic}</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
                <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(result.answer)}}></div>
@@ -438,9 +458,20 @@ export default function ContentGeneratorPage() {
                             </AccordionTrigger>
                             <AccordionContent>
                                 <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
-                                    <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
-                                        Reasoning
-                                    </h4>
+                                    <div className="flex items-start justify-between">
+                                        <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex-grow">
+                                            Reasoning
+                                        </h4>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleCopy(result.reasoning, 'reasoning')}
+                                            className="h-8 w-8 flex-shrink-0 -mr-2 -mt-2 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900 dark:hover:text-amber-100"
+                                            aria-label="Copy reasoning"
+                                        >
+                                            <Copy className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                     <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(result.reasoning)}}></div>
                                 </div>
                             </AccordionContent>

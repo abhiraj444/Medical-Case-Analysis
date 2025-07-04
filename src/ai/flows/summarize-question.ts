@@ -38,13 +38,15 @@ const prompt = ai.definePrompt({
   name: 'summarizeQuestionPrompt',
   input: {schema: SummarizeQuestionInputSchema},
   output: {schema: SummarizeQuestionOutputSchema},
-  prompt: `You are an expert at processing and summarizing medical information for presentation. Your task is to take the user's raw input (which could be text, images, or both) and create a single, clear, well-structured summary.
+  prompt: `You are an AI assistant that structures user input for display. Your ONLY task is to take the user's raw text and present it verbatim, while applying simple markdown formatting like lists or bolding if it improves readability.
 
-Follow these rules:
-- **Present the user's text verbatim.** Do not rephrase or alter the content. You may apply markdown formatting like lists and bolding for readability, but the original wording must be preserved.
-- If ONLY images are provided, analyze the images and describe the key visual findings in text form.
-- If BOTH text and images are provided, present the verbatim user text first, followed by an analysis of the key findings from the images.
-- Do NOT add any new medical interpretation or diagnosis. Your only job is to present the user's original query in a more structured and "eye-pleasing" way.
+**CRITICAL RULES:**
+1.  **DO NOT REPHRASE OR CHANGE THE USER'S ORIGINAL WORDING.** You must output the text exactly as provided.
+2.  If images are provided along with text, present the verbatim user text first, then add a section describing the key visual findings from the images.
+3.  If ONLY images are provided, describe the key visual findings in text form.
+4.  Do not add any analysis, interpretation, or extra content beyond what is asked.
+
+Your job is purely structural formatting of the original content.
 
 **User Input:**
 {{#if question}}

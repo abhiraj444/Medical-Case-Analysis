@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
-import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Lightbulb } from 'lucide-react';
+import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Lightbulb, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -214,6 +214,19 @@ export default function DiagnosisPage() {
     router.push('/');
   };
 
+  const handleCopy = (textToCopy: string, type: string) => {
+    const plainText = textToCopy.replace(/\*\*/g, '');
+    navigator.clipboard.writeText(plainText).then(
+      () => {
+        toast({ title: 'Copied to clipboard', description: `The ${type} has been copied.` });
+      },
+      (err) => {
+        toast({ title: 'Error', description: 'Failed to copy text.', variant: 'destructive' });
+        console.error('Could not copy text: ', err);
+      }
+    );
+  };
+
   const formatText = (text: string) => {
     if (!text) return '';
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
@@ -305,11 +318,18 @@ export default function DiagnosisPage() {
           {clinicalAnswer && clinicalAnswer.answer && (
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <BrainCircuit className="text-primary"/>
-                        Direct Answer
-                    </CardTitle>
-                    <CardDescription>Topic: {clinicalAnswer.topic}</CardDescription>
+                    <div className="flex w-full items-start justify-between gap-4">
+                        <div className="flex-grow">
+                            <CardTitle className="flex items-center gap-2">
+                                <BrainCircuit className="text-primary"/>
+                                Direct Answer
+                            </CardTitle>
+                            <CardDescription>Topic: {clinicalAnswer.topic}</CardDescription>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => handleCopy(clinicalAnswer.answer, 'answer')} aria-label="Copy answer">
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.answer)}}></div>
@@ -324,9 +344,20 @@ export default function DiagnosisPage() {
                                 </AccordionTrigger>
                                 <AccordionContent>
                                     <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
-                                        <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
-                                            Reasoning
-                                        </h4>
+                                        <div className="flex items-start justify-between">
+                                            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex-grow">
+                                                Reasoning
+                                            </h4>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleCopy(clinicalAnswer.reasoning, 'reasoning')}
+                                                className="h-8 w-8 flex-shrink-0 -mr-2 -mt-2 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900 dark:hover:text-amber-100"
+                                                aria-label="Copy reasoning"
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                         <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
                                     </div>
                                 </AccordionContent>
