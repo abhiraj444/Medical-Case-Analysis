@@ -59,6 +59,11 @@ import {
 import { modifySlides } from '@/ai/flows/modify-slides';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from './ui/label';
+import { useAuth } from '@/hooks/useAuth';
+import { storage, db } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, updateDoc } from 'firebase/firestore';
+
 
 // Data structures for the structured JSON content
 interface ParagraphContent {
@@ -92,6 +97,7 @@ export interface Slide {
 interface SlideEditorProps {
   initialSlides: Slide[];
   topic: string;
+  caseId: string | null;
   onRefresh: () => void;
   onSlidesUpdate: (slides: Slide[]) => void;
 }
@@ -112,7 +118,7 @@ const renderContentItem = (item: ContentItem, index: number) => {
     if (!boldWords || boldWords.length === 0) {
       return <>{text}</>;
     }
-    const regex = new RegExp(`(${boldWords.join('|')})`, 'g');
+    const regex = new RegExp(`(${boldWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'g');
     const parts = text.split(regex);
     return (
       <>
@@ -168,6 +174,7 @@ const renderContentItem = (item: ContentItem, index: number) => {
 export function SlideEditor({
   initialSlides,
   topic: initialTopic,
+  caseId,
   onRefresh,
   onSlidesUpdate,
 }: SlideEditorProps) {
@@ -177,6 +184,7 @@ export function SlideEditor({
   const [isModifying, setIsModifying] = useState(false);
   const [isRefreshModalOpen, setIsRefreshModalOpen] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     setSlides(initialSlides);
@@ -418,16 +426,35 @@ export function SlideEditor({
       });
 
       const blob = await Packer.toBlob(doc);
-      saveAs(blob, `${topic.replace(/\s+/g, '_') || 'document'}.docx`);
+      const docName = `${topic.replace(/\s+/g, '_') || 'document'}.docx`;
+      saveAs(blob, docName);
       toast({
-        title: 'Document Generated',
-        description: 'Your Word document has been downloaded.',
+        title: 'Document Downloaded',
+        description: 'Your Word document has been downloaded locally.',
       });
+
+      if (caseId && user) {
+        toast({ title: "Uploading document...", description: "Please wait." });
+        const storageRef = ref(storage, `users/${user.uid}/cases/${caseId}/${docName}`);
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+        
+        const caseDocRef = doc(db, 'cases', caseId);
+        await updateDoc(caseDocRef, {
+            generatedFileUrl: downloadURL
+        });
+
+        toast({
+            title: 'Document Saved',
+            description: 'Your document has been saved to your case history.',
+        });
+      }
+
     } catch (error) {
       console.error('Error generating docx:', error);
       toast({
         title: 'An Error Occurred',
-        description: 'Failed to generate Word document. Please check the console.',
+        description: 'Failed to generate or save Word document. Please check the console.',
         variant: 'destructive',
       });
     } finally {

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ChangeEvent, type ClipboardEvent } from 'react';
+import { useState, type ChangeEvent, type ClipboardEvent, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { generateSlideOutline } from '@/ai/flows/generate-slide-outline';
 import { answerClinicalQuestion, type AnswerClinicalQuestionOutput } from '@/ai/flows/answer-clinical-question';
 import { Button } from '@/components/ui/button';
@@ -13,22 +14,69 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit } from 'lucide-react';
 import { SlideEditor } from '@/components/SlideEditor';
 import type { Slide } from '@/components/SlideEditor';
+import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+
 
 export default function ContentGeneratorPage() {
   const [mode, setMode] = useState<'question' | 'topic'>('question');
   
-  // State for question mode
   const [question, setQuestion] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   
-  // State for topic mode
   const [topic, setTopic] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnswerClinicalQuestionOutput | null>(null);
   const [slides, setSlides] = useState<Slide[] | null>(null);
+  const [currentCaseId, setCurrentCaseId] = useState<string | null>(null);
+
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+   useEffect(() => {
+    const caseId = searchParams.get('caseId');
+    if (caseId && user) {
+      const loadCase = async () => {
+        setIsLoading(true);
+        try {
+          const caseRef = doc(db, 'cases', caseId);
+          const caseSnap = await getDoc(caseRef);
+          if (caseSnap.exists() && caseSnap.data().userId === user.uid) {
+            const caseData = caseSnap.data();
+            setMode(caseData.inputData.mode);
+            setQuestion(caseData.inputData.question || '');
+            setImagePreview(caseData.inputData.image || null);
+            setTopic(caseData.inputData.topic || '');
+            setResult(caseData.outputData.result);
+            setSlides(caseData.outputData.slides);
+            setCurrentCaseId(caseId);
+            toast({ title: "Case Loaded", description: `Successfully loaded case: ${caseData.title}` });
+          } else {
+             toast({ title: "Error", description: "Could not find or access the specified case.", variant: 'destructive'});
+             router.push('/content-generator');
+          }
+        } catch (error) {
+            console.error("Failed to load case:", error);
+            toast({ title: "Error", description: "Failed to load the case from history.", variant: 'destructive'});
+            router.push('/content-generator');
+        } finally {
+            setIsLoading(false);
+        }
+      };
+      loadCase();
+    }
+  }, [searchParams, user, router, toast]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -61,7 +109,7 @@ export default function ContentGeneratorPage() {
                     title: "Image Pasted",
                     description: `Pasted image from clipboard.`,
                 });
-                break; // Stop after finding the first image
+                break;
             }
         }
     }
@@ -81,6 +129,7 @@ export default function ContentGeneratorPage() {
     setIsLoading(true);
     setResult(null);
     setSlides(null);
+    setCurrentCaseId(null);
 
     try {
       const image = imageFile ? await fileToDataUri(imageFile) : undefined;
@@ -106,9 +155,9 @@ export default function ContentGeneratorPage() {
     setIsLoading(true);
     setResult(null);
     setSlides(null);
+    setCurrentCaseId(null);
 
     try {
-      // We'll use the result object to store the topic and a summary
       const summaryResult = {
           answer: `This is a general overview for the topic: **${topic}**. You can now generate a presentation outline based on this.`,
           reasoning: '',
@@ -129,7 +178,7 @@ export default function ContentGeneratorPage() {
   }
 
   const handleGeneratePresentation = async () => {
-    if (!result?.topic) return;
+    if (!result?.topic || !user) return;
 
     setIsLoading(true);
     setSlides(null);
@@ -137,6 +186,30 @@ export default function ContentGeneratorPage() {
     try {
       const generatedSlides = await generateSlideOutline({ topic: result.topic });
       setSlides(generatedSlides);
+
+      const image = imageFile ? await fileToDataUri(imageFile) : undefined;
+      const caseData = {
+          userId: user.uid,
+          type: 'content-generator',
+          title: result.topic,
+          createdAt: serverTimestamp(),
+          inputData: {
+              mode,
+              question: question.trim() || null,
+              image: image || null,
+              topic: topic.trim() || null,
+          },
+          outputData: {
+              result: result,
+              slides: generatedSlides,
+          }
+      };
+      
+      const docRef = await addDoc(collection(db, 'cases'), caseData);
+      setCurrentCaseId(docRef.id);
+
+      toast({ title: 'Case Saved', description: 'Your content generation case has been saved to your history.' });
+
     } catch (error) {
       console.error('Outline generation failed:', error);
       toast({
@@ -155,6 +228,14 @@ export default function ContentGeneratorPage() {
   const formatText = (text: string) => {
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
   };
+  
+  if (authLoading || (!user && !searchParams.get('caseId'))) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   if (slides && result) {
     return (
@@ -163,6 +244,7 @@ export default function ContentGeneratorPage() {
                 key={result.topic}
                 initialSlides={slides}
                 topic={result.topic}
+                caseId={currentCaseId}
                 onRefresh={handleGeneratePresentation}
                 onSlidesUpdate={setSlides}
             />
