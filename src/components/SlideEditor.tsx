@@ -209,6 +209,16 @@ export function SlideEditor({
     setSelectedIndices([]);
   }, [initialSlides]);
 
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      document.body.classList.remove('printing');
+    };
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
+
   const handleSelectionChange = (index: number) => {
     setSelectedIndices((prev) =>
       prev.includes(index)
@@ -311,7 +321,10 @@ export function SlideEditor({
   };
 
   const handleGeneratePdf = () => {
-    window.print();
+    document.body.classList.add('printing');
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
   
   const handleExportToWord = async () => {

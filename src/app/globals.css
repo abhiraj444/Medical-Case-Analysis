@@ -78,25 +78,30 @@ body {
 }
 
 @media print {
-    /* Hide everything except the printable area */
-    body > *:not(#printable-area) {
-        display: none !important;
+    /* Hide everything when printing by default */
+    body.printing * {
+        visibility: hidden;
     }
 
-    /* Make the printable area visible */
-    #printable-area {
-        display: block !important;
-    }
-    
-    /* Remove default browser headers/footers and margins */
-    @page {
-        size: letter;
-        margin: 0;
+    /* Then, make the printable area and its children visible */
+    body.printing #printable-area, body.printing #printable-area * {
+        visibility: visible;
     }
 
-    html, body {
-        margin: 0;
-        padding: 0;
+    /* Position the printable area to take up the whole page */
+    body.printing #printable-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+
+    /* Ensure content is black and white for printing */
+    #printable-area, #printable-area * {
+        color: black !important;
+        background-color: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
     }
     
     .printable-slide {
@@ -110,14 +115,6 @@ body {
         page-break-after: avoid;
     }
 
-    /* Ensure content is black and white */
-    body, .prose, .prose *, h1, h2, h3, th, td, p, li, ul, ol {
-        color: black !important;
-        background-color: white !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-    
     table {
       width: 100%;
       border-collapse: collapse;
@@ -125,5 +122,10 @@ body {
     th, td {
       border: 1px solid #ccc;
       padding: 8px;
+    }
+    
+    @page {
+        size: letter;
+        margin: 0;
     }
 }
