@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle, Copy } from 'lucide-react';
+import { Loader2, Wand2, Lightbulb, FileText, Bot, BrainCircuit, PlusCircle, Copy, FileDown } from 'lucide-react';
 import { SlideEditor } from '@/components/SlideEditor';
 import type { Slide } from '@/components/SlideEditor';
 import { useAuth } from '@/hooks/useAuth';
@@ -86,6 +86,16 @@ export default function ContentGeneratorPage() {
       loadCase();
     }
   }, [searchParams, user, router, toast, currentCaseId]);
+
+  useEffect(() => {
+    const afterPrint = () => {
+        document.body.classList.remove('printing-answer');
+    };
+    window.addEventListener('afterprint', afterPrint);
+    return () => {
+        window.removeEventListener('afterprint', afterPrint);
+    };
+  }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -323,6 +333,14 @@ export default function ContentGeneratorPage() {
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
   };
   
+  const handlePrintAnswer = () => {
+    if (!result) return;
+    document.body.classList.add('printing-answer');
+    setTimeout(() => {
+        window.print();
+    }, 100);
+  };
+  
   if (authLoading || (!user && !searchParams.get('caseId'))) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center">
@@ -445,6 +463,9 @@ export default function ContentGeneratorPage() {
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(result.answer, 'answer')} aria-label="Copy answer">
                       <Copy className="h-4 w-4" />
                   </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrintAnswer} disabled={!result} aria-label="Download Answer PDF">
+                      <FileDown className="h-4 w-4" />
+                  </Button>
                   <Button variant="outline" onClick={handleNewCase} disabled={isLoading} className="w-full shrink-0 sm:w-auto">
                       <PlusCircle />
                       New Case
@@ -530,6 +551,21 @@ export default function ContentGeneratorPage() {
             />
         )}
       </div>
+      <div id="printable-answer-area">
+        {result && (
+            <>
+                <h2>{result.topic}</h2>
+                <h3>Answer</h3>
+                <div dangerouslySetInnerHTML={{ __html: formatText(result.answer) }} />
+                {result.reasoning && (
+                    <>
+                        <h3>Reasoning</h3>
+                        <div dangerouslySetInnerHTML={{ __html: formatText(result.reasoning) }} />
+                    </>
+                )}
+            </>
+        )}
+    </div>
     </div>
   );
 }

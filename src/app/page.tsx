@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
-import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Lightbulb, Copy } from 'lucide-react';
+import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Lightbulb, Copy, FileDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -83,6 +83,16 @@ export default function DiagnosisPage() {
       loadCase();
     }
   }, [searchParams, user, router, toast, currentCaseId]);
+
+  useEffect(() => {
+    const afterPrint = () => {
+        document.body.classList.remove('printing-answer');
+    };
+    window.addEventListener('afterprint', afterPrint);
+    return () => {
+        window.removeEventListener('afterprint', afterPrint);
+    };
+  }, []);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -227,6 +237,14 @@ export default function DiagnosisPage() {
     );
   };
 
+  const handlePrintAnswer = () => {
+    if (!clinicalAnswer) return;
+    document.body.classList.add('printing-answer');
+    setTimeout(() => {
+        window.print();
+    }, 100);
+  };
+
   const formatText = (text: string) => {
     if (!text) return '';
     return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />');
@@ -364,6 +382,9 @@ export default function DiagnosisPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(clinicalAnswer.answer, 'answer')} aria-label="Copy answer">
                                 <Copy className="h-4 w-4" />
                             </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrintAnswer} disabled={!clinicalAnswer} aria-label="Download Answer PDF">
+                                <FileDown className="h-4 w-4" />
+                            </Button>
                             <Button variant="outline" onClick={handleNewCase} className="w-full shrink-0 sm:w-auto">
                                 <PlusCircle />
                                 New Case
@@ -455,6 +476,21 @@ export default function DiagnosisPage() {
           </div>
         </div>
       </div>
+      <div id="printable-answer-area">
+        {clinicalAnswer && (
+            <>
+                <h2>{clinicalAnswer.topic}</h2>
+                <h3>Answer</h3>
+                <div dangerouslySetInnerHTML={{ __html: formatText(clinicalAnswer.answer) }} />
+                {clinicalAnswer.reasoning && (
+                    <>
+                        <h3>Reasoning</h3>
+                        <div dangerouslySetInnerHTML={{ __html: formatText(clinicalAnswer.reasoning) }} />
+                    </>
+                )}
+            </>
+        )}
+    </div>
     </div>
   );
 }

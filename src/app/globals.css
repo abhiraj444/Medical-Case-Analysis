@@ -71,3 +71,75 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Print-specific styles for answer download */
+#printable-answer-area { display: none; }
+
+@media print {
+  body.printing-answer .app-ui {
+    display: none !important;
+  }
+  body:not(.printing-answer) #printable-answer-area {
+    display: none !important;
+  }
+  body.printing-answer #printable-answer-area {
+    display: block !important;
+    font-family: 'Inter', sans-serif;
+    color: #000;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 1in; /* Standard 1-inch margins */
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+  
+  #printable-answer-area h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 0.5rem;
+  }
+
+  #printable-answer-area h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  
+  #printable-answer-area p, #printable-answer-area ul, #printable-answer-area ol {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+  }
+
+  #printable-answer-area ul, #printable-answer-area ol {
+    padding-left: 1.5rem;
+  }
+
+  #printable-answer-area li {
+    margin-bottom: 0.5rem;
+  }
+
+  #printable-answer-area strong {
+    font-weight: 700;
+  }
+
+  #printable-answer-area h2, #printable-answer-area h3 {
+      page-break-after: avoid;
+  }
+  
+  #printable-answer-area p, #printable-answer-area ul, #printable-answer-area ol {
+      page-break-inside: avoid;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
