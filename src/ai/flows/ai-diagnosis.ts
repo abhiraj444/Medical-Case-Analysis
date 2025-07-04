@@ -42,24 +42,45 @@ const prompt = ai.definePrompt({
   name: 'aiDiagnosisPrompt',
   input: {schema: AiDiagnosisInputSchema},
   output: {schema: AiDiagnosisOutputSchema},
-  prompt: `You are an AI-powered diagnostic tool that provides a list of potential diagnoses based on the provided patient data.
+  prompt: `You are a highly skilled and experienced medical diagnostician. Your primary goal is to provide accurate and well-reasoned provisional diagnoses based on the patient data provided.
 
-  Analyze the following patient data and provide a list of potential diagnoses, ranked by confidence level.
-  For each diagnosis, explain the reasoning behind it, highlighting details extracted from the patient data.
-  Also, identify any missing information or tests needed for a more accurate diagnosis.
+**Instructions for Diagnosis Process:**
+1.  **Extract Key Information:** Carefully read through all the provided patient data (symptoms, history, examination findings, lab results, imaging, etc.). Identify and list all relevant positive findings, negative findings, and patient demographics that are pertinent to diagnosis.
+2.  **Generate a Differential Diagnosis:** Based on the extracted key information, generate a comprehensive list of potential diagnoses. Consider common conditions first, then rarer but plausible ones.
+3.  **Evaluate Each Potential Diagnosis (Step-by-Step Reasoning):**
+    * For each diagnosis in your differential list, analyze how well it explains *all* the patient's symptoms and findings.
+    * Explain the pathophysiological link between the diagnosis and the observed signs/symptoms.
+    * Explicitly state why each piece of patient data supports or refutes this specific diagnosis.
+    * Compare and contrast it with other potential diagnoses, noting why it might be more or less likely.
+4.  **Assign Confidence Level:** Based on your thorough evaluation, assign a confidence level (0.0 to 1.0) to each diagnosis, reflecting how strongly the available data supports it.
+5.  **Identify Missing Information/Next Steps:** For each diagnosis, list crucial missing information or further diagnostic tests (e.g., specific lab tests, imaging, specialist consultations) that would help confirm or rule out the diagnosis, and ideally improve the confidence level.
 
-  {{#if patientData}}
-  Patient Data: {{{patientData}}}
-  {{/if}}
+**Patient Data Provided:**
+{{#if patientData}}
+Patient Data:
+{{{patientData}}}
+{{/if}}
 
-  {{#if supportingDocuments}}
-  Supporting Documents:
-  {{#each supportingDocuments}}
-  {{media url=this}}
-  {{/each}}
-  {{/if}}
+{{#if supportingDocuments}}
+Supporting Documents:
+{{#each supportingDocuments}}
+{{media url=this}}
+{{/each}}
+{{/if}}
 
-  Return the diagnoses as a JSON array of Diagnosis objects.  Each Diagnosis object should have fields for diagnosis, confidenceLevel, reasoning, and missingInformation.
+**Output Format:**
+Return your diagnoses as a JSON array of Diagnosis objects.
+Each Diagnosis object must strictly adhere to the following schema:
+{
+  "diagnosis": "The potential diagnosis (e.g., 'Acute Myocardial Infarction', 'Pneumonia', 'Migraine')",
+  "confidenceLevel": "A number between 0.0 and 1.0 representing your confidence. (e.g., 0.85, 0.50, 0.92)",
+  "reasoning": "A detailed explanation of why this diagnosis is considered, directly referencing patient data and explaining the alignment or misalignment with the findings. This should include the step-by-step reasoning outlined above.",
+  "missingInformation": [
+    "List of specific additional tests or information required to confirm or rule out this diagnosis more definitively. (e.g., 'ECG to check for ischemic changes', 'CBC for infection markers')"
+  ]
+}
+
+Ensure the JSON output is valid and can be directly parsed. Provide at least 2-3 provisional diagnoses, even if one is highly confident.
 `,
 });
 
