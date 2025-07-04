@@ -19,6 +19,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 import type { StructuredQuestion } from '@/types';
 import { QuestionDisplay } from '@/components/QuestionDisplay';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export default function DiagnosisPage() {
   const [patientData, setPatientData] = useState('');
@@ -313,13 +314,24 @@ export default function DiagnosisPage() {
                 <CardContent className="space-y-4">
                   <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.answer)}}></div>
                     {clinicalAnswer.reasoning && (
-                        <div className="rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
-                            <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2 flex items-center gap-2">
-                                <Lightbulb className="h-4 w-4" />
-                                Reasoning
-                            </h4>
-                            <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
-                        </div>
+                        <Accordion type="single" collapsible className="w-full">
+                            <AccordionItem value="item-1" className="border-b-0">
+                                <AccordionTrigger>
+                                    <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-primary">
+                                        <Lightbulb className="h-4 w-4" />
+                                        Click here to see the detailed analysis
+                                    </div>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 dark:bg-amber-950">
+                                        <h4 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+                                            Reasoning
+                                        </h4>
+                                        <div className="prose prose-sm prose-invert max-w-none text-amber-700 dark:text-amber-300" dangerouslySetInnerHTML={{__html: formatText(clinicalAnswer.reasoning)}}></div>
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
                     )}
                 </CardContent>
             </Card>
