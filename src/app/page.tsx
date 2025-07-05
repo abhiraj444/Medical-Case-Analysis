@@ -15,8 +15,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DiagnosisCard } from '@/components/DiagnosisCard';
 import { Bot, FileText, Loader2, Upload, PlusCircle, BrainCircuit, Copy, FileDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
 import type { StructuredQuestion } from '@/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -145,26 +147,37 @@ export default function DiagnosisPage() {
     setStructuredQuestion(null);
 
     try {
-      const supportingDocuments = await Promise.all(files.map(fileToDataUri));
+      // Data URIs are still needed for the AI call
+      const supportingDocumentsDataUris = await Promise.all(files.map(fileToDataUri));
+
+      // NEW: Upload files to Storage and get public URLs for saving
+      const uploadFile = async (file: File): Promise<string> => {
+        if (!storage || !user) return '';
+        const filePath = `user_uploads/${user.uid}/${uuidv4()}-${file.name}`;
+        const storageRef = ref(storage, filePath);
+        await uploadBytes(storageRef, file);
+        return getDownloadURL(storageRef);
+      };
+      const supportingDocumentsStorageUrls = await Promise.all(files.map(uploadFile));
       
       const [diagnosisResults, summaryResponse, answerResponse] = await Promise.all([
         aiDiagnosis({
           patientData: patientData.trim() ? patientData : undefined,
-          supportingDocuments: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+          supportingDocuments: supportingDocumentsDataUris.length > 0 ? supportingDocumentsDataUris : undefined,
         }),
         summarizeQuestion({
           question: patientData.trim() ? patientData : undefined,
-          images: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+          images: supportingDocumentsDataUris.length > 0 ? supportingDocumentsDataUris : undefined,
         }),
         answerClinicalQuestion({
           question: patientData.trim() ? patientData : undefined,
-          images: supportingDocuments.length > 0 ? supportingDocuments : undefined,
+          images: supportingDocumentsDataUris.length > 0 ? supportingDocumentsDataUris : undefined,
         })
       ]);
       
       setResults(diagnosisResults);
       setClinicalAnswer(answerResponse);
-      const newStructuredQuestion = { summary: summaryResponse.summary, images: filePreviews };
+      const newStructuredQuestion = { summary: summaryResponse.summary, images: supportingDocuments };
       setStructuredQuestion(newStructuredQuestion);
       
       const title = diagnosisResults[0]?.diagnosis || answerResponse?.topic || 'New Diagnosis Case';
@@ -175,7 +188,7 @@ export default function DiagnosisPage() {
         createdAt: serverTimestamp(),
         inputData: {
           patientData: patientData.trim() || null,
-          supportingDocuments: filePreviews,
+          supportingDocuments: supportingDocuments,
           structuredQuestion: newStructuredQuestion,
         },
         outputData: {
@@ -199,7 +212,9 @@ export default function DiagnosisPage() {
       toast({
         title: 'An Error Occurred',
         description:
-          'Failed to get diagnosis. Please check the console for details.',
+          error instanceof Error && error.message.includes('storage/unauthorized')
+            ? 'Storage permission denied. Please check your Firebase Storage rules.'
+            : 'Failed to get diagnosis. Please check the console for details.',
         variant: 'destructive',
       });
     } finally {
